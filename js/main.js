@@ -15,7 +15,7 @@ const S = {
   mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false,
   symmetry: 'none', depthRange: 50,
 };
-const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swap: false, sound: true };
+const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swap: false, sound: true, oneHandDraws: false };
 try { Object.assign(SET, JSON.parse(localStorage.getItem('aircanvas.settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('aircanvas.settings', JSON.stringify(SET)); } catch {} };
 
@@ -139,9 +139,10 @@ function bindSet(id, key, num) {
 }
 bindSet('set-dominant', 'dominant'); bindSet('set-trigger', 'trigger'); bindSet('set-reach', 'reach', true); bindSet('set-pinch', 'pinch', true);
 bindSet('set-dwell', 'dwell', true); bindSet('set-quality', 'quality'); bindSet('set-delegate', 'delegate');
-bindSet('set-skeleton', 'skeleton'); bindSet('set-swap', 'swap'); bindSet('set-sound', 'sound');
+bindSet('set-skeleton', 'skeleton'); bindSet('set-swap', 'swap'); bindSet('set-onehand', 'oneHandDraws'); bindSet('set-sound', 'sound');
 function applySettings(changed) {
-  Object.assign(ge.settings, { dominant: SET.dominant, reach: SET.reach / 100, pinch: SET.pinch / 100, swap: SET.swap, trigger: SET.trigger });
+  Object.assign(ge.settings, { dominant: SET.dominant, reach: SET.reach / 100, pinch: SET.pinch / 100, swap: SET.swap, trigger: SET.trigger, oneHandDraws: SET.oneHandDraws });
+  ge.tracks.forEach(tr => tr.role = null); // re-evaluate roles with new settings
   tracker.setQuality(SET.quality);
   if (changed === 'delegate' && tracker.landmarker) tracker.loadModel(SET.delegate).then(() => toast('Processor: ' + tracker.delegate)).catch(e => toast('Model error: ' + e.message));
   $('#hc-dom .ht').textContent = `Draw hand (${SET.dominant})`;
@@ -416,6 +417,7 @@ function updateFeedback(f, t) {
   if (noHandSince && t - noHandSince > 1500) hint = '✋ No hand detected — raise your hand in front of the camera';
   else if (f.dom.present && f.dom.scale > 0.5) hint = '↔ Hand too close — move back a little';
   else if (f.dom.present && f.dom.scale < 0.08) hint = '↔ Hand far away — move closer for better tracking';
+  else if (!f.dom.present && f.sup.present) hint = '✋ Only the control hand is visible — show your draw hand to draw';
   else if (lowLight) hint = '💡 Low light — face a light source for better tracking';
   else if (f.combo && Object.keys(f.holds).length) hint = 'Hold… ' + f.combo;
   const h = $('#hint'); h.textContent = hint; h.classList.toggle('hidden', !hint);
