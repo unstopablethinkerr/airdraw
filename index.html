@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AirCanvas – Two-Hand Gesture Drawing (2D + 3D)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✋</text></svg>">
+<link rel="stylesheet" href="css/app.css" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "./lib/three/three.module.js",
+    "three/addons/": "./lib/three/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ TOP BAR ============ -->
+  <header id="topbar">
+    <div class="brand">✋ AirCanvas</div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-mode="2d" data-air>🖌 2D Draw</button>
+      <button class="tab" data-mode="3d" data-air>🧊 3D Sculpt</button>
+    </div>
+    <div id="status" class="status">
+      <span class="pill" id="st-cam"><i></i>Camera</span>
+      <span class="pill" id="st-model"><i></i>Model</span>
+      <span class="pill" id="st-hands"><i></i>Hands: 0</span>
+      <span class="pill mono" id="st-perf">– fps</span>
+    </div>
+    <div class="top-actions">
+      <button id="btn-camera" class="btn primary" data-air>▶ Start camera</button>
+      <button id="btn-help" class="btn" data-air>❔ Gestures</button>
+      <button id="btn-settings" class="btn" data-air>⚙</button>
+    </div>
+  </header>
+
+  <!-- ============ STAGE ============ -->
+  <main id="stage">
+    <!-- 2D layers -->
+    <div id="view2d" class="view active">
+      <canvas id="c-bg"></canvas>
+      <canvas id="c-main"></canvas>
+      <canvas id="c-live"></canvas>
+    </div>
+    <!-- 3D -->
+    <div id="view3d" class="view">
+      <canvas id="c-3d"></canvas>
+      <div id="depth-meter"><div class="lbl">Depth</div><div class="bar"><div id="depth-fill"></div></div></div>
+    </div>
+    <!-- gesture overlay (cursors, rings) -->
+    <canvas id="c-overlay"></canvas>
+
+    <div id="hint" class="hint hidden"></div>
+    <div id="toasts"></div>
+  </main>
+
+  <!-- ============ LEFT TOOLBAR ============ -->
+  <aside id="toolbar" class="panel">
+    <div class="group" id="tools2d">
+      <div class="glabel">Draw</div>
+      <button class="tool active" data-tool="pen" data-air title="Pen">✒️<span>Pen</span></button>
+      <button class="tool" data-tool="brush" data-air title="Brush (speed-sensitive)">🖌️<span>Brush</span></button>
+      <button class="tool" data-tool="marker" data-air title="Marker">🖍️<span>Marker</span></button>
+      <button class="tool" data-tool="calligraphy" data-air title="Calligraphy">🪶<span>Callig.</span></button>
+      <button class="tool" data-tool="neon" data-air title="Neon glow">💡<span>Neon</span></button>
+      <button class="tool" data-tool="rainbow" data-air title="Rainbow">🌈<span>Rainbow</span></button>
+      <button class="tool" data-tool="gradient" data-air title="Gradient (Color A → B)">🎨<span>Gradient</span></button>
+      <button class="tool" data-tool="spray" data-air title="Spray">💨<span>Spray</span></button>
+      <button class="tool" data-tool="eraser" data-air title="Eraser">🧽<span>Eraser</span></button>
+      <div class="glabel">Shapes</div>
+      <button class="tool" data-tool="line" data-air title="Line">／<span>Line</span></button>
+      <button class="tool" data-tool="rect" data-air title="Rectangle">▭<span>Rect</span></button>
+      <button class="tool" data-tool="ellipse" data-air title="Ellipse">◯<span>Ellipse</span></button>
+      <button class="tool" data-tool="triangle" data-air title="Triangle">△<span>Tri</span></button>
+      <button class="tool" data-tool="arrow" data-air title="Arrow">➜<span>Arrow</span></button>
+      <button class="tool" data-tool="star" data-air title="Star">☆<span>Star</span></button>
+    </div>
+    <div class="group hidden" id="tools3d">
+      <div class="glabel">Create</div>
+      <button class="tool active" data-tool3="stroke" data-air title="3D tube stroke">〰️<span>Stroke</span></button>
+      <button class="tool" data-tool3="ribbon" data-air title="Flat ribbon">🎗️<span>Ribbon</span></button>
+      <button class="tool" data-tool3="cube" data-air title="Cube">🧊<span>Cube</span></button>
+      <button class="tool" data-tool3="sphere" data-air title="Sphere">⚪<span>Sphere</span></button>
+      <button class="tool" data-tool3="cylinder" data-air title="Cylinder">🥫<span>Cylinder</span></button>
+      <button class="tool" data-tool3="cone" data-air title="Cone">🔺<span>Cone</span></button>
+      <button class="tool" data-tool3="torus" data-air title="Torus">🍩<span>Torus</span></button>
+      <div class="glabel">Edit</div>
+      <button class="tool" data-tool3="select" data-air title="Select / move / rotate">✋<span>Select</span></button>
+      <button class="tool" data-tool3="erase" data-air title="Delete on pinch">🧽<span>Delete</span></button>
+    </div>
+    <div class="group">
+      <div class="glabel">History</div>
+      <button class="tool" id="btn-undo" data-air title="Undo (Ctrl+Z)">↶<span>Undo</span></button>
+      <button class="tool" id="btn-redo" data-air title="Redo (Ctrl+Y)">↷<span>Redo</span></button>
+      <button class="tool" id="btn-clear" data-air title="Clear">🗑️<span>Clear</span></button>
+    </div>
+  </aside>
+
+  <!-- ============ RIGHT PANEL ============ -->
+  <aside id="props" class="panel">
+    <section>
+      <h4>Color</h4>
+      <div id="swatches" class="swatches"></div>
+      <div class="row">
+        <label>A <input type="color" id="colorA" value="#1e66f5"></label>
+        <label>B <input type="color" id="colorB" value="#ff3d7f"></label>
+        <button class="btn sm" id="btn-swap" data-air title="Swap A/B">⇄</button>
+      </div>
+    </section>
+    <section>
+      <h4>Brush</h4>
+      <label class="slider">Size <input type="range" id="size" min="1" max="80" value="8"><b id="size-v">8</b></label>
+      <label class="slider">Opacity <input type="range" id="opacity" min="5" max="100" value="100"><b id="opacity-v">100</b></label>
+      <label class="slider">Smoothing <input type="range" id="smooth" min="0" max="100" value="60"><b id="smooth-v">60</b></label>
+      <label class="check"><input type="checkbox" id="fill"> Fill shapes</label>
+    </section>
+
+    <section id="props2d">
+      <h4>Layout</h4>
+      <select id="layout">
+        <option value="white">White page</option>
+        <option value="dark">Dark board</option>
+        <option value="grid">Grid</option>
+        <option value="dots">Dot grid</option>
+        <option value="lined">Lined paper</option>
+        <option value="blueprint">Blueprint</option>
+        <option value="transparent">Transparent</option>
+        <option value="camera">Camera (AR)</option>
+      </select>
+      <h4>Symmetry</h4>
+      <select id="symmetry">
+        <option value="none">None</option>
+        <option value="mirror-x">Mirror ↔</option>
+        <option value="mirror-y">Mirror ↕</option>
+        <option value="quad">4-way</option>
+        <option value="radial6">Radial 6 (mandala)</option>
+        <option value="radial8">Radial 8</option>
+      </select>
+    </section>
+
+    <section id="props3d" class="hidden">
+      <h4>Render</h4>
+      <select id="material">
+        <option value="standard">Standard</option>
+        <option value="glossy">Glossy</option>
+        <option value="metal">Metal</option>
+        <option value="toon">Toon</option>
+        <option value="wire">Wireframe</option>
+        <option value="normal">Normals</option>
+      </select>
+      <label class="check"><input type="checkbox" id="mirror3d"> Mirror X (symmetric sculpt)</label>
+      <label class="check"><input type="checkbox" id="autorotate"> Auto-rotate view</label>
+      <label class="check"><input type="checkbox" id="showgrid" checked> Show grid</label>
+      <label class="slider">Depth range <input type="range" id="depthRange" min="0" max="100" value="50"><b id="depthRange-v">50</b></label>
+      <h4>View</h4>
+      <div class="row wrap">
+        <button class="btn sm" data-view="front" data-air>Front</button>
+        <button class="btn sm" data-view="top" data-air>Top</button>
+        <button class="btn sm" data-view="side" data-air>Side</button>
+        <button class="btn sm" data-view="iso" data-air>Iso</button>
+      </div>
+      <h4>Selection</h4>
+      <div class="row wrap">
+        <button class="btn sm" id="sel-move" data-air>Move</button>
+        <button class="btn sm" id="sel-rot" data-air>Rotate</button>
+        <button class="btn sm" id="sel-scale" data-air>Scale</button>
+        <button class="btn sm" id="sel-dup" data-air>Duplicate</button>
+        <button class="btn sm" id="sel-color" data-air>Recolor</button>
+        <button class="btn sm danger" id="sel-del" data-air>Delete</button>
+      </div>
+      <div id="sel-info" class="muted">Nothing selected</div>
+    </section>
+
+    <section>
+      <h4>File</h4>
+      <div class="row wrap">
+        <button class="btn sm" id="btn-new" data-air>New</button>
+        <button class="btn sm" id="btn-open" data-air>📂 Open</button>
+        <button class="btn sm" id="btn-save" data-air>💾 Save project</button>
+      </div>
+      <div class="row wrap" id="export2d">
+        <button class="btn sm primary" id="btn-png" data-air>⬇ PNG</button>
+        <button class="btn sm" id="btn-jpg" data-air>⬇ JPG</button>
+        <button class="btn sm" id="btn-svg" data-air>⬇ SVG</button>
+      </div>
+      <div class="row wrap hidden" id="export3d">
+        <button class="btn sm primary" id="btn-stl" data-air>⬇ STL</button>
+        <button class="btn sm" id="btn-glb" data-air>⬇ GLB</button>
+        <button class="btn sm" id="btn-obj" data-air>⬇ OBJ</button>
+        <button class="btn sm" id="btn-shot" data-air>⬇ PNG view</button>
+      </div>
+      <input type="file" id="file-open" accept=".json,.aircanvas,application/json" hidden>
+      <div class="muted small" id="autosave-info">Autosave: on</div>
+    </section>
+  </aside>
+
+  <!-- ============ CAMERA PREVIEW + FEEDBACK ============ -->
+  <div id="cam-box">
+    <video id="video" playsinline muted></video>
+    <canvas id="c-skel"></canvas>
+    <div id="cam-off">Camera off</div>
+  </div>
+  <div id="hand-cards">
+    <div class="hcard" id="hc-dom"><div class="ht">Draw hand</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
+    <div class="hcard" id="hc-sup"><div class="ht">Control hand</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
+    <div class="hcard combo" id="hc-combo"><div class="ht">Combo</div><div class="hp">—</div></div>
+  </div>
+
+  <!-- ============ HELP MODAL ============ -->
+  <div id="help" class="modal hidden">
+    <div class="modal-body">
+      <button class="close" data-close data-air>✕</button>
+      <h2>Gesture guide</h2>
+      <p class="muted">The <b>draw hand</b> is your dominant hand (set in ⚙). With one hand visible, it always acts as the draw hand.</p>
+      <div class="gcols">
+        <div>
+          <h3>Draw hand</h3>
+          <table>
+            <tr><td>☝️ Point</td><td>Move cursor. Hold over any button ≈0.8 s to click it.</td></tr>
+            <tr><td>🤏 Pinch</td><td>Draw / place / grab (thumb + index).</td></tr>
+            <tr><td>✋ Open palm</td><td>2D: palm eraser. 3D: release.</td></tr>
+            <tr><td>✊ Fist</td><td>Pen up / pause.</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3>Control hand</h3>
+          <table>
+            <tr><td>✊ Fist (hold)</td><td>Undo</td></tr>
+            <tr><td>👍 Thumb up (hold)</td><td>Redo</td></tr>
+            <tr><td>✌️ Peace</td><td>Next colour</td></tr>
+            <tr><td>🤟 Three fingers</td><td>Next tool</td></tr>
+            <tr><td>🤏 Pinch + move up/down</td><td>2D: brush size · 3D: depth / scale selected</td></tr>
+            <tr><td>🤘 Rock (hold)</td><td>Switch 2D ⇄ 3D</td></tr>
+          </table>
+        </div>
+        <div>
+          <h3>Two-hand combos</h3>
+          <table>
+            <tr><td>🤏 + 🤏</td><td>2D: shape between both hands · 3D: orbit + zoom view</td></tr>
+            <tr><td>🤏 grab + 🤏 control</td><td>3D Select: rotate the grabbed object</td></tr>
+            <tr><td>🤏 draw + ✋ control open</td><td>2D: straight line (ruler)</td></tr>
+            <tr><td>👍 + 👍 (hold)</td><td>Download (2D: PNG · 3D: STL)</td></tr>
+            <tr><td>✋ + ✋ (hold 1.5 s)</td><td>Clear everything</td></tr>
+            <tr><td>✌️ + ✌️ (hold)</td><td>Save project file</td></tr>
+          </table>
+        </div>
+      </div>
+      <h3>Tips for good tracking</h3>
+      <ul class="muted">
+        <li>Good front lighting, plain background, hand 40–80 cm from the camera.</li>
+        <li>Keep the whole hand in view; palm facing the camera works best.</li>
+        <li>Rest your elbow and use “Reach” in ⚙ to draw with small movements.</li>
+        <li>Mouse / touch also works on the canvas for fine corrections.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS MODAL ============ -->
+  <div id="settings" class="modal hidden">
+    <div class="modal-body narrow">
+      <button class="close" data-close data-air>✕</button>
+      <h2>Settings</h2>
+      <label class="field">Draw hand
+        <select id="set-dominant"><option value="Right">Right hand</option><option value="Left">Left hand</option></select>
+      </label>
+      <label class="field">Draw trigger
+        <select id="set-trigger"><option value="pinch">Pinch (thumb + index)</option><option value="point">Index finger up</option></select>
+      </label>
+      <label class="slider">Reach (smaller = less arm movement) <input type="range" id="set-reach" min="40" max="100" value="75"><b id="set-reach-v">75</b></label>
+      <label class="slider">Pinch sensitivity <input type="range" id="set-pinch" min="10" max="60" value="32"><b id="set-pinch-v">32</b></label>
+      <label class="slider">Air-click dwell (ms) <input type="range" id="set-dwell" min="400" max="2000" step="100" value="800"><b id="set-dwell-v">800</b></label>
+      <label class="field">Tracking quality
+        <select id="set-quality">
+          <option value="eco">Eco (20 fps, low CPU)</option>
+          <option value="balanced" selected>Balanced (30 fps)</option>
+          <option value="high">High (max fps)</option>
+        </select>
+      </label>
+      <label class="field">Processor
+        <select id="set-delegate"><option value="GPU">GPU (recommended)</option><option value="CPU">CPU</option></select>
+      </label>
+      <label class="check"><input type="checkbox" id="set-skeleton" checked> Show hand skeleton in preview</label>
+      <label class="check"><input type="checkbox" id="set-swap"> Swap left/right detection</label>
+      <label class="check"><input type="checkbox" id="set-sound" checked> Click sounds</label>
+      <p class="muted small">Settings are saved in this browser.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
