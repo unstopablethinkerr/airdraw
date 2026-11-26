@@ -61,6 +61,71 @@ export class GestureEngine {
     this.cooldown = {};
     this.combo = '';
     this.handCount = 0;
+    this.tracks = []; this.trackSeq = 0;
+  }
+
+  // Stable role assignment. Each physical hand is followed frame to frame by position,
+  // its left/right label is averaged over time, and once both hands have roles they are
+  // LOCKED while both stay in view. Per-frame label flicker can no longer swap them.
+  _assignRoles(list, t, seen) {
+    const used = new Set();
+    for (const d of list) {
+      const vd = d.side === 'Right' ? 1 : -1;
+      let best = null, bd = 0.3;
+      for (const tr of this.tracks) {
+        if (used.has(tr)) continue;
+        // distance, plus a penalty when this frame's label disagrees with the hand's long-term label
+        const dd = Math.hypot(tr.cx - d.cx, tr.cy - d.cy) + (Math.abs(tr.vote) > 0.5 && Math.sign(tr.vote) !== vd ? 0.25 : 0);
+        if (dd < bd) { bd = dd; best = tr; }
+      }
+      if (!best) { best = { id: ++this.trackSeq, vote: 0, n: 0, role: null, forced: false }; this.tracks.push(best); }
+      used.add(best);
+      best.cx = d.cx; best.cy = d.cy; best.lastSeen = t;
+      const v = (d.side === 'Right' ? 1 : -1) * (d.score || 0.5);
+      // single-frame flicker barely moves the vote; a label that stays different for 5+ frames is believed quickly
+      best.disagree = best.n && Math.sign(v) !== Math.sign(best.vote) ? (best.disagree || 0) + 1 : 0;
+      const k = best.disagree >= 5 ? 0.3 : 0.08;
+      best.vote = best.n ? best.vote * (1 - k) + v * k : v; best.n++;
+      d.track = best;
+    }
+    // forget hands that left the view (short grace period keeps roles through dropouts)
+    this.tracks = this.tracks.filter(tr => used.has(tr) || t - tr.lastSeen < 400);
+    const domSide = this.settings.dominant;
+    const roleOf = (vote) => ((vote >= 0 ? 'Right' : 'Left') === domSide ? 'dom' : 'sup');
+    const live = list.map(d => d.track);
+
+    if (live.length === 1) {
+      const tr = live[0], other = this.tracks.find(x => x !== tr && x.role);
+      if (!tr.role) {
+        if (other) { tr.role = other.role === 'dom' ? 'sup' : 'dom'; tr.forced = false; }
+        else if (this.settings.oneHandDraws || Math.abs(tr.vote) < 0.3) { tr.role = 'dom'; tr.forced = true; }
+        else { tr.role = roleOf(tr.vote); tr.forced = false; }
+      }
+      if (this.settings.oneHandDraws && !other && tr.role !== 'dom') { tr.role = 'dom'; tr.forced = true; }
+    } else if (live.length >= 2) {
+      const [a, b] = live;
+      const byVotes = () => {
+        let right;
+        if (Math.abs(a.vote - b.vote) > 0.3) right = a.vote > b.vote ? a : b;
+        else right = a.cx > b.cx ? a : b; // labels unclear → screen position (mirrored view)
+        const left = right === a ? b : a;
+        right.role = domSide === 'Right' ? 'dom' : 'sup'; left.role = right.role === 'dom' ? 'sup' : 'dom';
+        a.forced = b.forced = false;
+      };
+      if (a.role && b.role && a.role !== b.role && !a.forced && !b.forced) {
+        // locked: keep roles while both hands stay tracked
+      } else if (a.role && !b.role || b.role && !a.role) {
+        const known = a.role ? a : b, fresh = known === a ? b : a;
+        const decisive = Math.abs(known.vote - fresh.vote) > 0.8 && Math.sign(known.vote) !== Math.sign(fresh.vote);
+        if (known.forced && decisive) byVotes(); // single-hand guess was wrong → fix it now
+        else { fresh.role = known.role === 'dom' ? 'sup' : 'dom'; known.forced = false; }
+      } else byVotes();
+    }
+    // correction: only when the long-term label strongly contradicts the role (not single-frame flicker)
+    const wrong = (tr) => tr.n > 8 && Math.abs(tr.vote) > 0.7 && roleOf(tr.vote) !== tr.role;
+    if (live.length === 1 && !this.settings.oneHandDraws && wrong(live[0]) && !this.tracks.some(x => x !== live[0] && x.role === roleOf(live[0].vote))) live[0].role = roleOf(live[0].vote);
+    if (live.length >= 2 && wrong(live[0]) && wrong(live[1])) { const r = live[0].role; live[0].role = live[1].role; live[1].role = r; }
+    for (const d of list) if (d.track.role && !seen[d.track.role]) seen[d.track.role] = d;
   }
 
   setSmoothing(s) { // 0..1, higher = smoother
@@ -80,20 +145,11 @@ export class GestureEngine {
         const hd = res.handedness?.[i]?.[0] || res.handednesses?.[i]?.[0];
         let side = hd ? (hd.categoryName === 'Left' ? 'Right' : 'Left') : 'Right'; // un-mirrored input → invert
         if (this.settings.swap) side = side === 'Left' ? 'Right' : 'Left';
-        list.push({ lm, side, score: hd ? hd.score : 0, cx: 1 - lm[9].x });
+        list.push({ lm, side, score: hd ? hd.score : 0, cx: 1 - lm[9].x, cy: lm[9].y });
       }
     }
     this.handCount = list.length;
-    if (list.length === 1) seen.dom = list[0];
-    else if (list.length >= 2) {
-      let [a, b] = list;
-      if (a.side === b.side) { // ambiguous: decide by screen position
-        const right = a.cx > b.cx ? a : b, left = right === a ? b : a;
-        right.side = 'Right'; left.side = 'Left';
-      }
-      seen.dom = a.side === this.settings.dominant ? a : b;
-      seen.sup = seen.dom === a ? b : a;
-    }
+    this._assignRoles(list, t, seen);
 
     for (const role of ['dom', 'sup']) {
       const h = this[role], s = seen[role];
@@ -108,8 +164,13 @@ export class GestureEngine {
         }
         continue;
       }
+      if (h.trackId !== s.track.id) { // role moved to another physical hand → start clean
+        if (h.pinch) h.edges.pinchEnd = true;
+        h.pinch = false; h.present = false; h.pose = 'NONE'; h.rawPose = 'NONE';
+        h.fx.reset(); h.fy.reset(); h.fs.reset(); h.fr.reset(); h.trackId = s.track.id;
+      }
       const wasPresent = h.present;
-      h.present = true; h.lastSeen = t; h.lm = s.lm; h.side = s.side; h.score = s.score;
+      h.present = true; h.lastSeen = t; h.lm = s.lm; h.side = s.track.vote >= 0 ? 'Right' : 'Left'; h.score = Math.min(1, Math.abs(s.track.vote));
       const c = classify(s.lm, aspect, h.pinch, this.settings.pinch);
       // pinch needs 2 consistent frames to start (avoids accidental dots)
       let pinchNow = c.pinch;
