@@ -22,20 +22,20 @@
   <header id="topbar">
     <div class="brand">✋ AirCanvas</div>
     <div class="tabs" role="tablist">
-      <button class="tab active" data-mode="2d" data-air>🖌 2D Draw</button>
-      <button class="tab" data-mode="3d" data-air>🧊 3D Sculpt</button>
+      <button class="tab active" data-mode="2d" data-air>2D</button>
+      <button class="tab" data-mode="3d" data-air>3D</button>
     </div>
     <div id="status" class="status">
-      <span class="pill" id="st-cam"><i></i>Camera</span>
-      <span class="pill" id="st-model"><i></i>Model</span>
-      <span class="pill" id="st-hands"><i></i>Hands: 0</span>
-      <span class="pill mono" id="st-perf">– fps</span>
+      <span class="pill dot" id="st-cam" title="Camera"><i></i>Camera</span>
+      <span class="pill dot" id="st-model" title="Model"><i></i>Model</span>
+      <span class="pill" id="st-hands" title="Hands detected"><i></i>✋ 0</span>
+      <span class="pill mono" id="st-perf">–</span>
     </div>
     <div class="top-actions">
-      <button id="btn-camera" class="btn primary" data-air>▶ Start camera</button>
-      <button id="btn-tutorial" class="btn" data-air>🎓 Tutorial</button>
-      <button id="btn-help" class="btn" data-air>❔ Gestures</button>
-      <button id="btn-settings" class="btn" data-air>⚙</button>
+      <button id="btn-camera" class="btn primary" data-air>▶ Camera</button>
+      <button id="btn-tutorial" class="btn icon" data-air title="Tutorial">🎓</button>
+      <button id="btn-help" class="btn icon" data-air title="Gesture guide">❔</button>
+      <button id="btn-settings" class="btn icon" data-air title="Settings">⚙</button>
     </div>
   </header>
 
@@ -98,6 +98,13 @@
       <div class="glabel">Edit</div>
       <button class="tool" data-tool3="select" data-air title="Select / move / rotate">✋<span>Select</span></button>
       <button class="tool" data-tool3="erase" data-air title="Delete on pinch">🧽<span>Delete</span></button>
+      <div class="glabel">Selected <span id="sel-info">· none</span></div>
+      <button class="tool" id="sel-move" data-air title="Gizmo: move">✥<span>Move</span></button>
+      <button class="tool" id="sel-rot" data-air title="Gizmo: rotate">⟳<span>Rotate</span></button>
+      <button class="tool" id="sel-scale" data-air title="Gizmo: scale">⤢<span>Scale</span></button>
+      <button class="tool" id="sel-dup" data-air title="Duplicate">⧉<span>Copy</span></button>
+      <button class="tool" id="sel-color" data-air title="Apply colour A">🎨<span>Recolor</span></button>
+      <button class="tool" id="sel-del" data-air title="Delete selected">❌<span>Delete</span></button>
     </div>
   </aside>
 
@@ -105,21 +112,21 @@
   <aside id="props" class="panel">
     <section>
       <h4>File</h4>
-      <div class="row wrap">
+      <div class="row">
         <button class="btn sm" id="btn-new" data-air>New</button>
         <button class="btn sm" id="btn-open" data-air>📂 Open</button>
-        <button class="btn sm" id="btn-save" data-air>💾 Save project</button>
+        <button class="btn sm" id="btn-save" data-air>💾 Save</button>
       </div>
-      <div class="row wrap" id="export2d">
+      <div class="row" id="export2d">
         <button class="btn sm primary" id="btn-png" data-air>⬇ PNG</button>
         <button class="btn sm" id="btn-jpg" data-air>⬇ JPG</button>
         <button class="btn sm" id="btn-svg" data-air>⬇ SVG</button>
       </div>
-      <div class="row wrap hidden" id="export3d">
+      <div class="row hidden" id="export3d">
         <button class="btn sm primary" id="btn-stl" data-air>⬇ STL</button>
-        <button class="btn sm" id="btn-glb" data-air>⬇ GLB</button>
-        <button class="btn sm" id="btn-obj" data-air>⬇ OBJ</button>
-        <button class="btn sm" id="btn-shot" data-air>⬇ PNG view</button>
+        <button class="btn sm" id="btn-glb" data-air>GLB</button>
+        <button class="btn sm" id="btn-obj" data-air>OBJ</button>
+        <button class="btn sm" id="btn-shot" data-air>PNG</button>
       </div>
       <input type="file" id="file-open" accept=".json,.aircanvas,application/json" hidden>
       <div class="muted small" id="autosave-info">Autosave: on</div>
@@ -130,73 +137,65 @@
       <div class="row">
         <label>A <input type="color" id="colorA" value="#1e66f5"></label>
         <label>B <input type="color" id="colorB" value="#ff3d7f"></label>
-        <button class="btn sm" id="btn-swap" data-air title="Swap A/B">⇄</button>
+        <button class="btn sm" id="btn-swap" data-air title="Swap A/B">⇄ Swap</button>
       </div>
     </section>
     <section>
       <h4>Brush</h4>
-      <label class="slider">Size <input type="range" id="size" min="1" max="80" value="8"><b id="size-v">8</b></label>
-      <label class="slider">Opacity <input type="range" id="opacity" min="5" max="100" value="100"><b id="opacity-v">100</b></label>
-      <label class="slider">Smoothing <input type="range" id="smooth" min="0" max="100" value="60"><b id="smooth-v">60</b></label>
-      <label class="check"><input type="checkbox" id="fill"> Fill shapes</label>
+      <div class="stp"><span>Size</span><button class="sb" data-step="size" data-d="-2" data-air>−</button><div class="aslider" data-for="size"><div class="af"></div><b id="size-v">8</b></div><button class="sb" data-step="size" data-d="2" data-air>+</button><input type="range" id="size" min="1" max="80" value="8" hidden></div>
+      <div class="stp only2d"><span>Opacity</span><button class="sb" data-step="opacity" data-d="-10" data-air>−</button><div class="aslider" data-for="opacity"><div class="af"></div><b id="opacity-v">100</b></div><button class="sb" data-step="opacity" data-d="10" data-air>+</button><input type="range" id="opacity" min="5" max="100" value="100" hidden></div>
+      <div class="stp"><span>Smoothing</span><button class="sb" data-step="smooth" data-d="-10" data-air>−</button><div class="aslider" data-for="smooth"><div class="af"></div><b id="smooth-v">60</b></div><button class="sb" data-step="smooth" data-d="10" data-air>+</button><input type="range" id="smooth" min="0" max="100" value="60" hidden></div>
+      <div class="duo only2d"><label class="check tog"><input type="checkbox" id="fill"> Fill</label><label class="check tog" title="Turns hand-drawn strokes into straight lines with sharp corners (stars, polygons)"><input type="checkbox" id="straight"> 📐 Straight</label></div>
     </section>
 
     <section id="props2d">
-      <h4>Layout</h4>
-      <select id="layout">
-        <option value="white">White page</option>
-        <option value="dark">Dark board</option>
-        <option value="grid">Grid</option>
-        <option value="dots">Dot grid</option>
-        <option value="lined">Lined paper</option>
-        <option value="blueprint">Blueprint</option>
-        <option value="transparent">Transparent</option>
-        <option value="camera">Camera (AR)</option>
-      </select>
-      <h4>Symmetry</h4>
-      <select id="symmetry">
-        <option value="none">None</option>
-        <option value="mirror-x">Mirror ↔</option>
-        <option value="mirror-y">Mirror ↕</option>
-        <option value="quad">4-way</option>
-        <option value="radial6">Radial 6 (mandala)</option>
-        <option value="radial8">Radial 8</option>
-      </select>
+      <div class="duo">
+        <label class="mini">Layout
+          <select id="layout">
+            <option value="white">White page</option>
+            <option value="dark">Dark board</option>
+            <option value="grid">Grid</option>
+            <option value="dots">Dot grid</option>
+            <option value="lined">Lined paper</option>
+            <option value="blueprint">Blueprint</option>
+            <option value="transparent">Transparent</option>
+            <option value="camera">Camera (AR)</option>
+          </select></label>
+        <label class="mini">Symmetry
+          <select id="symmetry">
+            <option value="none">None</option>
+            <option value="mirror-x">Mirror ↔</option>
+            <option value="mirror-y">Mirror ↕</option>
+            <option value="quad">4-way</option>
+            <option value="radial6">Radial 6</option>
+            <option value="radial8">Radial 8</option>
+          </select></label>
+      </div>
     </section>
 
     <section id="props3d" class="hidden">
       <h4>Render</h4>
-      <select id="material">
-        <option value="standard">Standard</option>
-        <option value="glossy">Glossy</option>
-        <option value="metal">Metal</option>
-        <option value="toon">Toon</option>
-        <option value="wire">Wireframe</option>
-        <option value="normal">Normals</option>
+      <select id="material" title="Material">
+        <option value="standard">Material: Standard</option>
+        <option value="glossy">Material: Glossy</option>
+        <option value="metal">Material: Metal</option>
+        <option value="toon">Material: Toon</option>
+        <option value="wire">Material: Wireframe</option>
+        <option value="normal">Material: Normals</option>
       </select>
-      <label class="check"><input type="checkbox" id="mirror3d"> Mirror X (symmetric sculpt)</label>
-      <label class="check"><input type="checkbox" id="autorotate"> Auto-rotate view</label>
-      <label class="check"><input type="checkbox" id="showgrid" checked> Show grid</label>
-      <label class="slider">Depth range <input type="range" id="depthRange" min="0" max="100" value="50"><b id="depthRange-v">50</b></label>
-      <h4>View</h4>
-      <div class="row wrap">
+      <div class="grid3" style="margin-top:5px">
+        <label class="check tog"><input type="checkbox" id="showgrid" checked> Grid</label>
+        <label class="check tog"><input type="checkbox" id="mirror3d"> Mirror</label>
+        <label class="check tog"><input type="checkbox" id="autorotate"> Spin</label>
+      </div>
+      <div class="stp"><span>Depth range</span><button class="sb" data-step="depthRange" data-d="-10" data-air>−</button><div class="aslider" data-for="depthRange"><div class="af"></div><b id="depthRange-v">50</b></div><button class="sb" data-step="depthRange" data-d="10" data-air>+</button><input type="range" id="depthRange" min="0" max="100" value="50" hidden></div>
+      <div class="row">
         <button class="btn sm" data-view="front" data-air>Front</button>
         <button class="btn sm" data-view="top" data-air>Top</button>
         <button class="btn sm" data-view="side" data-air>Side</button>
         <button class="btn sm" data-view="iso" data-air>Iso</button>
       </div>
-      <h4>Selection</h4>
-      <div class="row wrap">
-        <button class="btn sm" id="sel-move" data-air>Move</button>
-        <button class="btn sm" id="sel-rot" data-air>Rotate</button>
-        <button class="btn sm" id="sel-scale" data-air>Scale</button>
-        <button class="btn sm" id="sel-dup" data-air>Duplicate</button>
-        <button class="btn sm" id="sel-color" data-air>Recolor</button>
-        <button class="btn sm danger" id="sel-del" data-air>Delete</button>
-      </div>
-      <div id="sel-info" class="muted">Nothing selected</div>
     </section>
-
   </aside>
 
   <!-- ============ CAMERA PREVIEW + FEEDBACK ============ -->
@@ -206,9 +205,9 @@
     <div id="cam-off">Camera off</div>
   </div>
   <div id="hand-cards">
-    <div class="hcard" id="hc-dom"><div class="ht">Draw hand</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
-    <div class="hcard" id="hc-sup"><div class="ht">Control hand</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
-    <div class="hcard combo" id="hc-combo"><div class="ht">Combo</div><div class="hp">—</div></div>
+    <div class="hcard" id="hc-dom"><div class="ht">DRAW</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
+    <div class="hcard" id="hc-sup"><div class="ht">CTRL</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
+    <div class="hcard combo hidden" id="hc-combo"><div class="ht">Combo</div><div class="hp">—</div></div>
   </div>
 
   <!-- ============ TUTORIAL ============ -->
