@@ -98,9 +98,20 @@ export class Draw2D {
     c.pts.push([x, y, w]);
     if (c.tool === 'eraser') this._eraseSeg(c, c.pts.length - 1); else this.renderLive();
   }
-  end(dropTail = 0) {
+  end(dropTail = 0, opts = {}) {
     const c = this.cur; if (!c) return; this.cur = null;
     if (!SHAPES.includes(c.tool) && dropTail && c.pts.length > dropTail + 2) c.pts.splice(-dropTail);
+    // hand strokes: clean up the path after release
+    if (opts.finish && !SHAPES.includes(c.tool) && c.tool !== 'eraser' && c.tool !== 'spray' && c.pts.length > 3) {
+      if (opts.straighten) { // shape assist: straight edges + sharp corners (stars, polygons)
+        // smooth away tremor first, then keep only real corners (tolerance scales with the drawing's size)
+        const xs = c.pts.map(q => q[0]), ys = c.pts.map(q => q[1]);
+        const span = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        const p = rdp(smoothPts(resample(c.pts, 3), 3, 2), Math.max(7, span * 0.022));
+        if (p.length > 3 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 35) p[p.length - 1] = [...p[0]];
+        c.pts = p.map(q => [q[0], q[1], 1]); c.poly = true;
+      } else c.pts = rdp(smoothPts(resample(c.pts, 2.5), 3, 2), 0.3);
+    }
     if (SHAPES.includes(c.tool) && Math.hypot(c.pts[1][0] - c.pts[0][0], c.pts[1][1] - c.pts[0][1]) < 4) { this.renderLive(); return; }
     delete c.t;
     c.pts = c.pts.map(p => [Math.round(p[0] * 10) / 10, Math.round(p[1] * 10) / 10, Math.round(p[2] * 100) / 100]);
@@ -209,6 +220,48 @@ export function drawLayout(ctx, layout, W, H) {
 }
 function grid(ctx, W, H, g) { ctx.beginPath(); for (let x = g; x < W; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, H); } for (let y = g; y < H; y += g) { ctx.moveTo(0, y); ctx.lineTo(W, y); } ctx.stroke(); }
 
+// ---- path clean-up helpers ----
+function resample(pts, step) {
+  const out = [pts[0]]; let prev = pts[0], carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = prev, b = pts[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    let t = step - carry;
+    while (t <= d) { const k = t / d; out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]); t += step; }
+    carry = d - (t - step); prev = b;
+  }
+  out.push(pts[pts.length - 1]); return out;
+}
+function smoothPts(pts, r, passes) { // moving average, endpoints fixed
+  let p = pts;
+  for (let n = 0; n < passes; n++) {
+    const q = p.map(x => x.slice());
+    for (let i = 1; i < p.length - 1; i++) {
+      const lo = Math.max(0, i - r), hi = Math.min(p.length - 1, i + r); let sx = 0, sy = 0, sw = 0;
+      for (let j = lo; j <= hi; j++) { sx += p[j][0]; sy += p[j][1]; sw += p[j][2]; }
+      const k = hi - lo + 1; q[i] = [sx / k, sy / k, sw / k];
+    }
+    p = q;
+  }
+  return p;
+}
+function rdp(pts, eps) { // Ramer–Douglas–Peucker simplification
+  if (pts.length < 3) return pts.slice();
+  const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop(); let md = 0, mi = -1;
+    const [x1, y1] = pts[a], [x2, y2] = pts[b], L = Math.hypot(x2 - x1, y2 - y1) || 1e-6;
+    for (let i = a + 1; i < b; i++) { const d = Math.abs((x2 - x1) * (y1 - pts[i][1]) - (x1 - pts[i][0]) * (y2 - y1)) / L; if (d > md) { md = d; mi = i; } }
+    if (md > eps) { keep[mi] = 1; stack.push([a, mi], [mi, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+function pathOf(ctx, s) {
+  if (!s.poly) return smoothPath(ctx, s.pts);
+  ctx.beginPath(); ctx.moveTo(s.pts[0][0], s.pts[0][1]); for (const q of s.pts.slice(1)) ctx.lineTo(q[0], q[1]);
+}
+function dOf(s) { return s.poly ? 'M' + s.pts.map(q => q[0].toFixed(1) + ' ' + q[1].toFixed(1)).join('L') : smoothD(s.pts); }
+
 function smoothPath(ctx, pts) {
   ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
   if (pts.length < 3) { ctx.lineTo(pts[pts.length - 1][0] + 0.01, pts[pts.length - 1][1]); return; }
@@ -252,9 +305,9 @@ export function renderStroke(ctx, s) {
   ctx.globalAlpha = s.opacity ?? 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.size;
   switch (s.tool) {
-    case 'pen': smoothPath(ctx, pts); ctx.stroke(); break;
-    case 'eraser': ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = 1; ctx.lineWidth = s.size * 2.2; smoothPath(ctx, pts); ctx.stroke(); break;
-    case 'marker': ctx.globalAlpha = (s.opacity ?? 1) * 0.45; ctx.lineCap = 'butt'; ctx.lineWidth = s.size * 2; smoothPath(ctx, pts); ctx.stroke(); break;
+    case 'pen': pathOf(ctx, s); ctx.stroke(); break;
+    case 'eraser': ctx.globalCompositeOperation = 'destination-out'; ctx.globalAlpha = 1; ctx.lineWidth = s.size * 2.2; pathOf(ctx, s); ctx.stroke(); break;
+    case 'marker': ctx.globalAlpha = (s.opacity ?? 1) * 0.45; ctx.lineCap = 'butt'; ctx.lineWidth = s.size * 2; pathOf(ctx, s); ctx.stroke(); break;
     case 'brush':
       for (let i = 1; i < pts.length; i++) { ctx.lineWidth = s.size * (pts[i][2] + pts[i - 1][2]) / 2 * 1.4; ctx.beginPath(); ctx.moveTo(pts[i - 1][0], pts[i - 1][1]); ctx.lineTo(pts[i][0], pts[i][1]); ctx.stroke(); }
       if (pts.length === 1) { ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], s.size * 0.7, 0, 7); ctx.fill(); }
@@ -266,7 +319,7 @@ export function renderStroke(ctx, s) {
       ctx.fill(); break;
     }
     case 'neon':
-      ctx.shadowBlur = s.size * 2.5; ctx.shadowColor = s.color; smoothPath(ctx, pts); ctx.stroke();
+      ctx.shadowBlur = s.size * 2.5; ctx.shadowColor = s.color; pathOf(ctx, s); ctx.stroke();
       ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = Math.max(1, s.size * 0.35); ctx.stroke(); break;
     case 'rainbow': case 'gradient': {
       let total = 0; const acc = [0];
@@ -300,10 +353,10 @@ function strokeSVG(s, forceColor) {
   const pts = s.pts, op = s.opacity ?? 1, col = forceColor || s.color;
   const base = `stroke-linecap="round" stroke-linejoin="round"`;
   switch (s.tool) {
-    case 'pen': return `<path d="${smoothD(pts)}" fill="none" stroke="${col}" stroke-width="${s.size}" opacity="${op}" ${base}/>`;
-    case 'eraser': return `<path d="${smoothD(pts)}" fill="none" stroke="#000" stroke-width="${s.size * 2.2}" ${base}/>`;
-    case 'marker': return `<path d="${smoothD(pts)}" fill="none" stroke="${col}" stroke-width="${s.size * 2}" opacity="${op * 0.45}" stroke-linejoin="round"/>`;
-    case 'neon': return `<g filter="url(#glow)"><path d="${smoothD(pts)}" fill="none" stroke="${col}" stroke-width="${s.size}" opacity="${op}" ${base}/></g><path d="${smoothD(pts)}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="${Math.max(1, s.size * 0.35)}" ${base}/>`;
+    case 'pen': return `<path d="${dOf(s)}" fill="none" stroke="${col}" stroke-width="${s.size}" opacity="${op}" ${base}/>`;
+    case 'eraser': return `<path d="${dOf(s)}" fill="none" stroke="#000" stroke-width="${s.size * 2.2}" ${base}/>`;
+    case 'marker': return `<path d="${dOf(s)}" fill="none" stroke="${col}" stroke-width="${s.size * 2}" opacity="${op * 0.45}" stroke-linejoin="round"/>`;
+    case 'neon': return `<g filter="url(#glow)"><path d="${dOf(s)}" fill="none" stroke="${col}" stroke-width="${s.size}" opacity="${op}" ${base}/></g><path d="${dOf(s)}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="${Math.max(1, s.size * 0.35)}" ${base}/>`;
     case 'brush': case 'rainbow': case 'gradient': {
       let total = 0; const acc = [0]; for (let i = 1; i < pts.length; i++) { total += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); acc.push(total); }
       let out = `<g opacity="${op}" ${base} fill="none">`;

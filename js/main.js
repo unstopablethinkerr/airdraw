@@ -13,7 +13,7 @@ const TOOLS3D = ['stroke', 'ribbon', ...PRIMS, 'select', 'erase'];
 
 // ---------------- state ----------------
 const S = {
-  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false,
+  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false, straighten: false,
   symmetry: 'none', depthRange: 50,
 };
 const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swapLR: false, sound: true, oneHandDraws: false };
@@ -36,7 +36,7 @@ const tracker = new HandTracker(video, {
 });
 
 // ---------------- helpers ----------------
-function setPill(sel, cls, text) { const el = $(sel); el.className = 'pill ' + (cls || ''); el.lastChild.textContent = text; }
+function setPill(sel, cls, text, title) { const el = $(sel); el.className = 'pill ' + (el.classList.contains('dot') ? 'dot ' : '') + (cls || ''); el.lastChild.textContent = text; el.title = title || text; }
 function toast(msg, ms = 1400) {
   const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; $('#toasts').appendChild(el);
   setTimeout(() => el.remove(), ms); while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
@@ -64,16 +64,29 @@ $('#colorA').oninput = (e) => setColor(e.target.value, 'A');
 $('#colorB').oninput = (e) => setColor(e.target.value, 'B');
 $('#btn-swap').onclick = () => { const a = S.colorA; S.colorA = S.colorB; S.colorB = a; setColor(S.colorA); };
 
+function fillOf(id) { const el = $('#' + id), af = document.querySelector(`.aslider[data-for="${id}"] .af`); if (af) af.style.width = ((el.value - el.min) / (el.max - el.min) * 100) + '%'; }
+function setSlider(sl, clientX) { // value from a position along the slider bar
+  const el = $('#' + sl.dataset.for), r = sl.getBoundingClientRect(), k = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  const v = Math.round(+el.min + k * (el.max - el.min)); if (+el.value !== v) { el.value = v; el.dispatchEvent(new Event('input')); }
+}
+$$('.aslider').forEach(sl => {
+  sl.addEventListener('pointerdown', e => { sl.setPointerCapture(e.pointerId); sl.classList.add('drag'); setSlider(sl, e.clientX); });
+  sl.addEventListener('pointermove', e => { if (sl.hasPointerCapture(e.pointerId)) setSlider(sl, e.clientX); });
+  sl.addEventListener('pointerup', () => sl.classList.remove('drag'));
+  sl.addEventListener('wheel', e => { e.preventDefault(); const el = $('#' + sl.dataset.for); el.value = +el.value + (e.deltaY < 0 ? 1 : -1) * Math.max(1, Math.round((el.max - el.min) / 50)); el.dispatchEvent(new Event('input')); }, { passive: false });
+});
 function bindRange(id, key, fn) {
   const el = $('#' + id), lbl = $('#' + id + '-v');
   el.value = S[key] ?? SET[key];
-  const upd = () => { lbl.textContent = el.value; fn(+el.value); };
+  const upd = () => { lbl.textContent = el.value; fillOf(id); fn(+el.value); };
   el.oninput = upd; upd();
 }
 bindRange('size', 'size', v => { S.size = v; d3.radius = 0.02 + v * 0.006; scheduleUISave(); });
 bindRange('opacity', 'opacity', v => { S.opacity = v; scheduleUISave(); });
 bindRange('smooth', 'smooth', v => { S.smooth = v; ge.setSmoothing(v / 100); scheduleUISave(); });
 bindRange('depthRange', 'depthRange', v => { S.depthRange = v; scheduleUISave(); });
+$$('[data-step]').forEach(b => b.onclick = () => { const el = $('#' + b.dataset.step); el.value = Math.max(+el.min, Math.min(+el.max, +el.value + +b.dataset.d)); el.dispatchEvent(new Event('input')); });
+$('#straight').onchange = (e) => { S.straighten = e.target.checked; scheduleUISave(); };
 $('#fill').onchange = (e) => { S.fill = e.target.checked; scheduleUISave(); };
 $('#layout').onchange = (e) => { d2.setLayout(e.target.value); };
 $('#symmetry').onchange = (e) => { S.symmetry = e.target.value; scheduleUISave(); };
@@ -95,6 +108,7 @@ function setMode(m) {
   $$('.tab').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
   $('#view2d').classList.toggle('active', m === '2d'); $('#view3d').classList.toggle('active', m === '3d');
   for (const [a, b] of [['#tools2d', '#tools3d'], ['#props2d', '#props3d'], ['#export2d', '#export3d']]) { $(a).classList.toggle('hidden', m !== '2d'); $(b).classList.toggle('hidden', m !== '3d'); }
+  $$('.only2d').forEach(e => e.classList.toggle('hidden', m !== '2d'));
   d3.active = m === '3d';
   if (m === '3d') d3.resize(); else d2.resize();
   scheduleUISave();
@@ -114,7 +128,7 @@ $('#btn-shot').onclick = () => { fetch(d3.screenshot()).then(r => r.blob()).then
 $('#btn-save').onclick = () => saveProject();
 $('#btn-open').onclick = () => $('#file-open').click();
 $('#file-open').onchange = (e) => { const f = e.target.files[0]; if (f) openProject(f); e.target.value = ''; };
-$('#btn-new').onclick = () => { if (S.mode === '2d') { const r = $('#view2d').getBoundingClientRect(); d2.newDoc(r.width, r.height); } else d3.clear(); toast('New ' + S.mode.toUpperCase() + ' canvas'); };
+$('#btn-new').onclick = () => { (S.mode === '2d' ? d2 : d3).clear(); toast('New ' + S.mode.toUpperCase() + ' canvas (Undo brings it back)'); };
 
 $('#sel-move').onclick = () => d3.setGizmo('translate');
 $('#sel-rot').onclick = () => d3.setGizmo('rotate');
@@ -122,7 +136,7 @@ $('#sel-scale').onclick = () => d3.setGizmo('scale');
 $('#sel-dup').onclick = () => d3.duplicate(d3.selected);
 $('#sel-del').onclick = () => d3.remove(d3.selected);
 $('#sel-color').onclick = () => d3.recolor(d3.selected, S.colorA);
-d3.onSelect = (it) => { $('#sel-info').textContent = it ? `Selected: ${it.kind === 'prim' ? it.type : it.kind} #${it.id}` : 'Nothing selected'; };
+d3.onSelect = (it) => { $('#sel-info').textContent = it ? `· ${it.kind === 'prim' ? it.type : it.kind} #${it.id}` : '· none'; };
 
 // modals
 $('#btn-help').onclick = () => $('#help').classList.remove('hidden');
@@ -146,25 +160,24 @@ function applySettings(changed) {
   if (['swapLR', 'dominant', 'oneHandDraws'].includes(changed)) ge.tracks = []; // re-learn hand roles
   tracker.setQuality(SET.quality);
   if (changed === 'delegate' && tracker.landmarker) tracker.loadModel(SET.delegate).then(() => toast('Processor: ' + tracker.delegate)).catch(e => toast('Model error: ' + e.message));
-  $('#hc-dom .ht').textContent = `Draw hand (${SET.dominant})`;
-  $('#hc-sup .ht').textContent = `Control hand (${SET.dominant === 'Right' ? 'Left' : 'Right'})`;
+  $('#hc-dom').title = `Draw hand (${SET.dominant})`; $('#hc-sup').title = `Control hand (${SET.dominant === 'Right' ? 'Left' : 'Right'})`;
 }
 applySettings(); tracker.delegate = SET.delegate;
 
 // camera button
 $('#btn-camera').onclick = async () => {
   const b = $('#btn-camera');
-  if (tracker.running) { tracker.stop(); b.textContent = '▶ Start camera'; b.classList.add('primary'); $('#cam-off').classList.remove('hidden'); $('#cam-box').className = ''; endAllInteractions(); return; }
-  b.disabled = true; b.textContent = 'Starting…';
+  if (tracker.running) { tracker.stop(); b.textContent = '▶ Camera'; b.classList.add('primary'); $('#cam-off').classList.remove('hidden'); $('#cam-box').className = ''; endAllInteractions(); return; }
+  b.disabled = true; b.textContent = '…';
   try {
     await tracker.start();
-    b.textContent = '⏹ Stop camera'; b.classList.remove('primary'); $('#cam-off').classList.add('hidden');
+    b.textContent = '⏹ Camera'; b.classList.remove('primary'); $('#cam-off').classList.add('hidden');
     if (d2.doc.layout === 'camera') d2.renderBackground();
     toast('Show your hand ✋ — pinch 🤏 to draw');
   } catch (e) {
     console.error(e);
     const msg = e.name === 'NotAllowedError' ? 'Camera permission denied' : e.name === 'NotFoundError' ? 'No camera found' : (e.message || 'Camera error');
-    setPill('#st-cam', 'bad', msg); toast('⚠ ' + msg, 3000); b.textContent = '▶ Start camera';
+    setPill('#st-cam', 'bad', msg); toast('⚠ ' + msg, 3000); b.textContent = '▶ Camera';
     if (location.protocol === 'file:') toast('Open via a local server (see README) — file:// blocks camera & modules', 5000);
   }
   b.disabled = false;
@@ -181,7 +194,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'escape') { $$('.modal').forEach(m => m.classList.add('hidden')); d3.select(null); }
   else if (k === '[') { S.size = Math.max(1, S.size - 2); syncSize(); } else if (k === ']') { S.size = Math.min(80, S.size + 2); syncSize(); }
 });
-function syncSize() { $('#size').value = S.size; $('#size-v').textContent = S.size; d3.radius = 0.02 + S.size * 0.006; }
+function syncSize() { $('#size').value = S.size; $('#size-v').textContent = S.size; fillOf('size'); d3.radius = 0.02 + S.size * 0.006; }
 
 // mouse / touch drawing in 2D
 const cm = $('#c-main');
@@ -232,7 +245,8 @@ function applyProject(p) {
   if (p.d2) d2.load(p.d2);
   if (p.d3) d3.load(p.d3);
   $('#layout').value = d2.doc.layout; $('#symmetry').value = S.symmetry; $('#material').value = d3.matMode; $('#fill').checked = S.fill;
-  for (const id of ['size', 'opacity', 'smooth', 'depthRange']) { $('#' + id).value = S[id]; $('#' + id + '-v').textContent = S[id]; }
+  for (const id of ['size', 'opacity', 'smooth', 'depthRange']) { $('#' + id).value = S[id]; $('#' + id + '-v').textContent = S[id]; fillOf(id); }
+  $('#straight').checked = !!S.straighten;
   ge.setSmoothing(S.smooth / 100); syncSize();
   setColor(S.colorA); setTool2d(S.tool2d); setTool3d(S.tool3d); setMode(p.mode || S.mode);
 }
@@ -261,10 +275,10 @@ const UI_SEL = '.panel, #topbar, #cam-box, #hand-cards, .modal';
 function uiAt(x, y) {
   const el = document.elementFromPoint(x, y); if (!el) return null;
   if (!el.closest(UI_SEL)) return null;
-  return el.closest('button, select, label.check, input[type=checkbox], .sw') || el.closest(UI_SEL);
+  return el.closest('button, select, label.check, input[type=checkbox], .sw, .aslider') || el.closest(UI_SEL);
 }
 function airClick(el) {
-  if (!el || el.matches('.panel, #topbar, #cam-box, #hand-cards, .modal')) return;
+  if (!el || el.matches('.panel, #topbar, #cam-box, #hand-cards, .modal, .aslider')) return;
   if (el.tagName === 'SELECT') { el.selectedIndex = (el.selectedIndex + 1) % el.options.length; el.dispatchEvent(new Event('change')); toast(el.options[el.selectedIndex].text); }
   else if (el.matches('label.check')) { const cb = el.querySelector('input'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
   else el.click();
@@ -288,9 +302,15 @@ function onResults(res, t) {
   const uiEl = D.present ? uiAt(dp[0], dp[1]) : null;
 
   // ---- air UI: pinch-tap or dwell on buttons ----
+  // air slider: pinch on the bar, then slide left/right while pinching
+  if (uiEl && D.edges.pinchStart && uiEl.matches('.aslider')) { G.slider = uiEl; uiEl.classList.add('drag'); }
+  if (G.slider) {
+    if (D.present && D.pinch) { setSlider(G.slider, dp[0]); updateFeedback(f, t); return; }
+    G.slider.classList.remove('drag'); G.slider = null;
+  }
   if (uiEl && D.edges.pinchStart) { airClick(uiEl); G.dwellEl = null; }
   const dwellPose = D.pose === 'POINT';
-  if (uiEl && dwellPose && !uiEl.matches(UI_SEL)) {
+  if (uiEl && dwellPose && !uiEl.matches(UI_SEL + ', .aslider')) {
     if (G.dwellEl !== uiEl) { G.dwellEl = uiEl; G.dwellT = t; }
     G.dwellP = Math.min(1, (t - G.dwellT) / SET.dwell);
     if (G.dwellP >= 1) { airClick(uiEl); G.dwellT = t + 600; }
@@ -335,9 +355,23 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
   // freehand / single-hand shape
   if (drawOn && !handDrawing2d && drawStart && !overUI) {
     const ruler = Sp.present && Sp.pose === 'OPEN' && !SHAPES.includes(S.tool2d) && S.tool2d !== 'eraser';
-    d2.begin(ruler ? 'line' : S.tool2d, p, opts2d()); handDrawing2d = true;
-  } else if (drawOn && handDrawing2d) d2.add(p);
-  else if (!drawOn && handDrawing2d) { d2.end(2); handDrawing2d = false; }
+    const p0 = [D.rx * innerWidth - stageRect.left, D.ry * innerHeight - stageRect.top]; // true hand position, no smoothing lag
+    d2.begin(ruler ? 'line' : S.tool2d, p0, opts2d()); handDrawing2d = true; G.pen = p0.slice();
+  } else if (drawOn && handDrawing2d) {
+    G.lastRaw = [D.rx * innerWidth - stageRect.left, D.ry * innerHeight - stageRect.top];
+    // "lazy brush" stabilizer: the pen trails the cursor on a short string, so hand tremor
+    // never reaches the paper and curves come out smooth. Shapes follow the cursor directly.
+    if (d2.cur && SHAPES.includes(d2.cur.tool)) d2.add(p);
+    else {
+      const R = 2 + S.smooth / 100 * 16, dx = p[0] - G.pen[0], dy = p[1] - G.pen[1], dist = Math.hypot(dx, dy);
+      if (dist > R) { const k = (dist - R) / dist; G.pen[0] += dx * k; G.pen[1] += dy * k; d2.add(G.pen.slice()); }
+    }
+  }
+  else if (!drawOn && handDrawing2d) {
+    // finish the stroke where the hand really was (smoothing lag would otherwise cut off the last corner)
+    if (G.lastRaw && d2.cur && !SHAPES.includes(d2.cur.tool)) d2.add(G.lastRaw);
+    d2.end(0, { finish: true, straighten: S.straighten }); handDrawing2d = false; G.lastRaw = null;
+  }
 }
 function palmCenter(D) {
   // eraser stays exactly where the pointing cursor was (same smoothed point), no jump to the palm centre
@@ -414,7 +448,7 @@ const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI;
 let noHandSince = 0, lowLight = false;
 function updateFeedback(f, t) {
   const n = f.count;
-  setPill('#st-hands', n === 2 ? 'ok' : n === 1 ? 'ok' : 'warn', `Hands: ${n}`);
+  setPill('#st-hands', n ? 'ok' : 'warn', `✋ ${n}`, `Hands detected: ${n}`);
   $('#cam-box').className = n ? 'tracking' : 'nohand';
   if (n === 0) { if (!noHandSince) noHandSince = t; } else noHandSince = 0;
   let hint = '';
@@ -428,8 +462,8 @@ function updateFeedback(f, t) {
   if (t - G.lastCards > 90) { // throttle DOM updates
     G.lastCards = t;
     card('#hc-dom', f.dom, actionLabel(f.dom, true)); card('#hc-sup', f.sup, actionLabel(f.sup, false));
-    $('#hc-combo .hp').textContent = f.combo || '—';
-    setPill('#st-perf', '', `${tracker.fps.toFixed(0)} fps · ${tracker.inferMs.toFixed(0)} ms · ${tracker.delegate}`);
+    $('#hc-combo .hp').textContent = f.combo || '—'; $('#hc-combo').classList.toggle('hidden', !f.combo);
+    setPill('#st-perf', '', `${tracker.fps.toFixed(0)} fps`, `${tracker.fps.toFixed(0)} fps · ${tracker.inferMs.toFixed(0)} ms per frame · ${tracker.delegate}`);
   }
 }
 function actionLabel(h, dom) {

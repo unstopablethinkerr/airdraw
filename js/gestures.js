@@ -130,7 +130,7 @@ export class GestureEngine {
 
   setSmoothing(s) { // 0..1, higher = smoother
     this.settings.smooth = s;
-    const mc = 3.0 - s * 2.6, beta = 0.05 - s * 0.04;
+    const mc = 4.5 - s * 3.0, beta = 0.08 - s * 0.05; // light: the pen stabilizer does the rest
     for (const h of [this.dom, this.sup]) { h.fx.minCutoff = h.fy.minCutoff = mc; h.fx.beta = h.fy.beta = beta; }
   }
 
@@ -195,6 +195,7 @@ export class GestureEngine {
       const r = this.settings.reach, m = (1 - r) / 2;
       const nx = Math.max(0, Math.min(1, ((1 - px) - m) / r));
       const ny = Math.max(0, Math.min(1, (py - m) / r));
+      h.rx = nx; h.ry = ny; // raw (unfiltered) position
       h.x = h.fx.filter(nx, t); h.y = h.fy.filter(ny, t);
       h.scale = h.fs.filter(c.scale, t);
       h.roll = h.fr.filter(Math.atan2(-(lm[9].y - lm[0].y), -(lm[9].x - lm[0].x) * aspect), t);

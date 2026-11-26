@@ -157,7 +157,7 @@ export class Tutorial {
       },
       {
         icon: '👆', title: 'Click a button in the air',
-        text: 'Point at the <b>Undo</b> button in the left toolbar. Hold still until the ring fills, or pinch on it.<br>Undo and Redo are buttons only, so you can\'t undo by accident.',
+        text: 'Point at the <b>Undo</b> button in the toolbar on the right. Hold still until the ring fills, or pinch on it.<br>Undo and Redo are buttons only, so you can\'t undo by accident.',
         enter() { document.getElementById('btn-undo').classList.add('tu-glow'); },
         exit() { document.getElementById('btn-undo').classList.remove('tu-glow'); },
         on(type, el) { if (type === 'airclick' && el?.id === 'btn-undo') this._pass(); else if (type === 'airclick') this._status('That was a different button — aim for Undo'); },
@@ -181,7 +181,7 @@ export class Tutorial {
       },
       {
         icon: '🤟', title: 'Control hand: next tool',
-        text: 'Show <b>three fingers</b> (index, middle, ring) with your control hand. The tool changes, so watch the left toolbar.',
+        text: 'Show <b>three fingers</b> (index, middle, ring) with your control hand. The tool changes, so watch the toolbar on the right.',
         on(type) { if (type === 'nextTool') this._pass(); },
         check(f) { this._status(f.sup.present ? `Control hand: ${f.sup.pose}` : 'Show your control hand'); return null; },
         exit() { A.setTool('pen'); },
