@@ -13,7 +13,7 @@ const TOOLS3D = ['stroke', 'ribbon', ...PRIMS, 'select', 'erase'];
 
 // ---------------- state ----------------
 const S = {
-  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false, straighten: false,
+  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false, fillMode: 'off', straighten: false,
   symmetry: 'none', depthRange: 50,
 };
 const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swapLR: false, sound: true, oneHandDraws: false };
@@ -48,7 +48,7 @@ function beep(f = 880, d = 0.05) {
 }
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-const opts2d = () => ({ color: S.colorA, color2: S.colorB, size: S.size, opacity: S.opacity / 100, sym: S.symmetry, fill: S.fill });
+const opts2d = () => ({ color: S.colorA, color2: S.colorB, size: S.size, opacity: S.opacity / 100, sym: S.symmetry, fill: S.fillMode !== 'off', fillMode: S.fillMode });
 
 // ---------------- UI wiring ----------------
 const sw = $('#swatches');
@@ -87,7 +87,7 @@ bindRange('smooth', 'smooth', v => { S.smooth = v; ge.setSmoothing(v / 100); sch
 bindRange('depthRange', 'depthRange', v => { S.depthRange = v; scheduleUISave(); });
 $$('[data-step]').forEach(b => b.onclick = () => { const el = $('#' + b.dataset.step); el.value = Math.max(+el.min, Math.min(+el.max, +el.value + +b.dataset.d)); el.dispatchEvent(new Event('input')); });
 $('#straight').onchange = (e) => { S.straighten = e.target.checked; scheduleUISave(); };
-$('#fill').onchange = (e) => { S.fill = e.target.checked; scheduleUISave(); };
+$('#fillmode').onchange = (e) => { S.fillMode = e.target.value; S.fill = S.fillMode !== 'off'; scheduleUISave(); };
 $('#layout').onchange = (e) => { d2.setLayout(e.target.value); };
 $('#symmetry').onchange = (e) => { S.symmetry = e.target.value; scheduleUISave(); };
 $('#material').onchange = (e) => { d3.setMaterialMode(e.target.value); scheduleAutosave(); };
@@ -244,7 +244,7 @@ function applyProject(p) {
   if (p.ui) Object.assign(S, p.ui);
   if (p.d2) d2.load(p.d2);
   if (p.d3) d3.load(p.d3);
-  $('#layout').value = d2.doc.layout; $('#symmetry').value = S.symmetry; $('#material').value = d3.matMode; $('#fill').checked = S.fill;
+  $('#layout').value = d2.doc.layout; $('#symmetry').value = S.symmetry; $('#material').value = d3.matMode; if (!S.fillMode) S.fillMode = S.fill ? 'gradient' : 'off'; $('#fillmode').value = S.fillMode;
   for (const id of ['size', 'opacity', 'smooth', 'depthRange']) { $('#' + id).value = S[id]; $('#' + id + '-v').textContent = S[id]; fillOf(id); }
   $('#straight').checked = !!S.straighten;
   ge.setSmoothing(S.smooth / 100); syncSize();

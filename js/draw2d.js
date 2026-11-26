@@ -82,7 +82,7 @@ export class Draw2D {
   _push() { this.undoStack.push(this.doc.strokes.slice()); if (this.undoStack.length > 300) this.undoStack.shift(); this.redoStack = []; }
   begin(tool, p, o) {
     const [x, y] = this.toDoc(p[0], p[1]);
-    this.cur = { tool, color: o.color, color2: o.color2, size: o.size, opacity: o.opacity, sym: o.sym, fill: !!o.fill, seed: (Math.random() * 1e9) | 0, pts: [[x, y, 1]], t: performance.now() };
+    this.cur = { tool, color: o.color, color2: o.color2, size: o.size, opacity: o.opacity, sym: o.sym, fill: !!o.fill, fillMode: o.fillMode || (o.fill ? 'gradient' : 'off'), seed: (Math.random() * 1e9) | 0, pts: [[x, y, 1]], t: performance.now() };
     if (SHAPES.includes(tool)) this.cur.pts.push([x, y, 1]);
     this.renderLive();
   }
@@ -342,8 +342,11 @@ export function renderStroke(ctx, s) {
       if (s.tool === 'gradient-fill') break;
       shapePath(ctx, s);
       if (s.fill && s.tool !== 'line' && s.tool !== 'arrow') {
-        if (s.color2 && s.color2 !== s.color) { const g = ctx.createLinearGradient(pts[0][0], pts[0][1], pts[1][0], pts[1][1]); g.addColorStop(0, s.color); g.addColorStop(1, s.color2); ctx.fillStyle = g; }
-        ctx.fill();
+        if (s.fillMode === 'solid') { ctx.fillStyle = s.color2 || s.color; ctx.fill(); ctx.stroke(); } // fill B + outline A
+        else { // gradient A → B (older files without fillMode behave like before)
+          if (s.color2 && s.color2 !== s.color) { const g = ctx.createLinearGradient(pts[0][0], pts[0][1], pts[1][0], pts[1][1]); g.addColorStop(0, s.color); g.addColorStop(1, s.color2); ctx.fillStyle = g; }
+          ctx.fill();
+        }
       } else ctx.stroke();
   }
   ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0;
@@ -379,6 +382,11 @@ function strokeSVG(s, forceColor) {
     }
     default: {
       const filled = s.fill && s.tool !== 'line' && s.tool !== 'arrow';
+      if (filled && s.fillMode === 'solid') return shapeSVG(s, `fill="${s.color2 || col}" stroke="${col}" stroke-width="${s.size}" opacity="${op}" ${base}`);
+      if (filled && s.color2 && s.color2 !== s.color) {
+        const id = 'g' + (s.seed >>> 0), [a, b] = s.pts;
+        return `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"><stop offset="0" stop-color="${s.color}"/><stop offset="1" stop-color="${s.color2}"/></linearGradient></defs>` + shapeSVG(s, `fill="url(#${id})" stroke="none" opacity="${op}"`);
+      }
       return shapeSVG(s, `fill="${filled ? col : 'none'}" stroke="${filled ? 'none' : col}" stroke-width="${s.size}" opacity="${op}" ${base}`);
     }
   }
