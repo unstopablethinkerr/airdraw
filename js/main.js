@@ -110,10 +110,15 @@ function setMode(m) {
   for (const [a, b] of [['#tools2d', '#tools3d'], ['#props2d', '#props3d'], ['#export2d', '#export3d']]) { $(a).classList.toggle('hidden', m !== '2d'); $(b).classList.toggle('hidden', m !== '3d'); }
   $$('.only2d').forEach(e => e.classList.toggle('hidden', m !== '2d'));
   d3.active = m === '3d';
-  if (m === '3d') d3.resize(); else d2.resize();
+  fitPanels(); if (m === '3d') d3.resize(); else d2.resize();
   scheduleUISave();
 }
 
+d2.onView = (z) => { $('#zoom-fit').textContent = Math.round(z * 100) + '%'; };
+$('#zoom-in').onclick = () => S.mode === '3d' ? d3.zoom(0.8) : d2.setZoom(d2.zoom * 1.25);
+$('#zoom-out').onclick = () => S.mode === '3d' ? d3.zoom(1.25) : d2.setZoom(d2.zoom / 1.25);
+$('#zoom-fit').onclick = () => S.mode === '3d' ? d3.setView('front') : d2.resetView();
+$('#c-main').addEventListener('wheel', (e) => { e.preventDefault(); d2.setZoom(d2.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.offsetX, e.offsetY); }, { passive: false });
 $('#btn-undo').onclick = () => doEvent('undo');
 $('#btn-redo').onclick = () => doEvent('redo');
 $('#btn-clear').onclick = () => { if (confirmClear()) doEvent('clear'); };
@@ -336,6 +341,11 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
     if (bothPinch) { d2.shapeFromTwo(SHAPES.includes(S.tool2d) ? S.tool2d : 'rect', q, p, opts2d()); return; }
     d2.end(); G.twoShape = false; handDrawing2d = false; return;
   }
+  // control-hand fist ✊ = grab the paper and move it (pan), useful when zoomed in
+  if (Sp.present && Sp.pose === 'FIST' && !handDrawing2d) {
+    if (G.panPrev) d2.panBy((Sp.x - G.panPrev[0]) * innerWidth * 1.5, (Sp.y - G.panPrev[1]) * innerHeight * 1.5);
+    G.panPrev = [Sp.x, Sp.y];
+  } else G.panPrev = null;
   // control-hand pinch alone → brush size
   if (Sp.present && Sp.pinch && !D.pinch) {
     if (!G.sizing) { G.sizing = true; G.sizeY0 = Sp.y; G.size0 = S.size; }
@@ -547,7 +557,20 @@ function drawOverlay() {
 requestAnimationFrame(drawOverlay);
 
 // ---------------- layout / init ----------------
-function onResize() { stageRect = $('#stage').getBoundingClientRect(); if (S.mode === '2d') d2.resize(); else d3.resize(); }
+// Panels always fit the screen: they shrink (scale) instead of scrolling,
+// and the drawing area ends where the panels begin.
+function fitPanels() {
+  for (const el of [$('#toolbar'), $('#props')]) {
+    el.style.transform = '';
+    const top = el.getBoundingClientRect().top, need = el.scrollHeight, avail = innerHeight - top - 10;
+    const k = Math.min(1, avail / need); el.style.transform = k < 0.999 ? `scale(${k.toFixed(3)})` : '';
+  }
+  const right = Math.max(0, innerWidth - $('#toolbar').getBoundingClientRect().left + 8);
+  $('#view2d').style.right = $('#view3d').style.right = right + 'px';
+  const r = $('#view2d').getBoundingClientRect();
+  if (!d2.doc.strokes.length && r.width > 50) { d2.doc.width = Math.round(r.width); d2.doc.height = Math.round(r.height); }
+}
+function onResize() { stageRect = $('#stage').getBoundingClientRect(); fitPanels(); if (S.mode === '2d') d2.resize(); else d3.resize(); }
 window.addEventListener('resize', () => { clearTimeout(onResize.t); onResize.t = setTimeout(onResize, 120); });
 
 (function init() {
@@ -557,7 +580,7 @@ window.addEventListener('resize', () => { clearTimeout(onResize.t); onResize.t =
   ge.setSmoothing(S.smooth / 100);
   let restored = false;
   try { const a = localStorage.getItem('aircanvas.autosave'); if (a) { applyProject(JSON.parse(a)); restored = true; } } catch (e) { console.warn('autosave restore failed', e); }
-  if (!restored) { d2.resize(); setColor(S.colorA); setTool3d('stroke'); setMode('2d'); }
+  if (!restored) { fitPanels(); d2.resize(); setColor(S.colorA); setTool3d('stroke'); setMode('2d'); }
   d3.resize();
   if (restored) toast('Restored your last session (📂 New to start fresh)', 2500);
   if (!window.isSecureContext) toast('⚠ Camera needs https:// or http://localhost', 5000);

@@ -48,10 +48,27 @@ export class Draw2D {
   resize() {
     const r = this.main.parentElement.getBoundingClientRect(), d = DPR();
     for (const c of [this.bg, this.main, this.live]) { c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d)); }
-    const s = Math.min(r.width / this.doc.width, r.height / this.doc.height);
-    this.view = { s, ox: (r.width - this.doc.width * s) / 2, oy: (r.height - this.doc.height * s) / 2, d, cw: r.width, ch: r.height };
-    this.renderBackground(); this.renderAll(); this.renderLive();
+    this.view = { d, cw: r.width, ch: r.height };
+    this._layout();
   }
+  // zoom & pan (view only – the drawing itself is untouched)
+  _layout() {
+    const v = this.view, fit = Math.min(v.cw / this.doc.width, v.ch / this.doc.height);
+    this.zoom = this.zoom || 1; this.panX = this.panX || 0; this.panY = this.panY || 0;
+    v.s = fit * this.zoom;
+    v.ox = (v.cw - this.doc.width * v.s) / 2 + this.panX; v.oy = (v.ch - this.doc.height * v.s) / 2 + this.panY;
+    this.renderBackground(); this.renderAll(); this.renderLive(); this.onView?.(this.zoom);
+  }
+  setZoom(z, cx = this.view.cw / 2, cy = this.view.ch / 2) {
+    const [dx, dy] = this.toDoc(cx, cy), v = this.view, fit = Math.min(v.cw / this.doc.width, v.ch / this.doc.height);
+    this.zoom = Math.max(0.25, Math.min(8, z));
+    const s = fit * this.zoom;
+    this.panX = cx - dx * s - (v.cw - this.doc.width * s) / 2; this.panY = cy - dy * s - (v.ch - this.doc.height * s) / 2;
+    if (Math.abs(this.zoom - 1) < 0.01 && Math.abs(this.panX) < 2 && Math.abs(this.panY) < 2) this.panX = this.panY = 0;
+    this._layout();
+  }
+  panBy(dx, dy) { this.panX += dx; this.panY += dy; this._layout(); }
+  resetView() { this.zoom = 1; this.panX = this.panY = 0; this._layout(); }
   // stage CSS px -> doc coords
   toDoc(x, y) { const v = this.view; return [(x - v.ox) / v.s, (y - v.oy) / v.s]; }
   _apply(ctx) { const v = this.view; ctx.setTransform(v.d * v.s, 0, 0, v.d * v.s, v.d * v.ox, v.d * v.oy); }

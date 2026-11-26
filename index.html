@@ -66,6 +66,11 @@
       <button class="tool" id="btn-undo" data-air title="Undo (Ctrl+Z)">↶<span>Undo</span></button>
       <button class="tool" id="btn-redo" data-air title="Redo (Ctrl+Y)">↷<span>Redo</span></button>
       <button class="tool" id="btn-clear" data-air title="Clear">🗑️<span>Clear</span></button>
+      <div class="zoomrow" id="zoombar">
+        <button class="sb" id="zoom-out" data-air title="Zoom out">−</button>
+        <button class="sb zv" id="zoom-fit" data-air title="Fit to screen (100%)">100%</button>
+        <button class="sb" id="zoom-in" data-air title="Zoom in">+</button>
+      </div>
     </div>
     <div class="group" id="tools2d">
       <div class="glabel">Draw</div>
@@ -249,6 +254,7 @@
           <table>
             <tr><td>✌️ Peace</td><td>Next colour</td></tr>
             <tr><td>🤟 Three fingers</td><td>Next tool</td></tr>
+            <tr><td>✊ Fist + move</td><td>2D: move the paper (when zoomed in)</td></tr>
             <tr><td>🤏 Pinch + move up/down</td><td>2D: brush size · 3D: depth / scale selected</td></tr>
             <tr><td>🤘 Rock (hold)</td><td>Switch 2D ⇄ 3D</td></tr>
           </table>

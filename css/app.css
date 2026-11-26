@@ -184,3 +184,11 @@ select{width:100%;background:var(--panel2);color:var(--text);border:1px solid va
 .aslider.drag{border-color:#ffd76a;box-shadow:0 0 0 2px #ffd76a55}
 
 .fsel{justify-content:center} .fsel select{height:100%;min-height:32px}
+
+/* ---- v5: panels always fit (scaled), canvas stops at the panels, zoom row ---- */
+#toolbar,#props{max-height:none!important;overflow:visible!important;transform-origin:top right}
+.zoomrow{grid-column:1/-1;display:grid;grid-template-columns:34px 1fr 34px;gap:4px}
+.zoomrow .sb{height:32px}
+.zoomrow .zv{font-size:12px;font-weight:600}
+.history .tool:nth-child(4){grid-column:1/-1;height:34px;flex-direction:row;gap:6px}
+.history .tool:last-child{grid-column:auto;height:44px;flex-direction:column;gap:1px}
