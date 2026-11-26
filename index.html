@@ -145,7 +145,11 @@
       <div class="stp"><span>Size</span><button class="sb" data-step="size" data-d="-2" data-air>−</button><div class="aslider" data-for="size"><div class="af"></div><b id="size-v">8</b></div><button class="sb" data-step="size" data-d="2" data-air>+</button><input type="range" id="size" min="1" max="80" value="8" hidden></div>
       <div class="stp only2d"><span>Opacity</span><button class="sb" data-step="opacity" data-d="-10" data-air>−</button><div class="aslider" data-for="opacity"><div class="af"></div><b id="opacity-v">100</b></div><button class="sb" data-step="opacity" data-d="10" data-air>+</button><input type="range" id="opacity" min="5" max="100" value="100" hidden></div>
       <div class="stp"><span>Smoothing</span><button class="sb" data-step="smooth" data-d="-10" data-air>−</button><div class="aslider" data-for="smooth"><div class="af"></div><b id="smooth-v">60</b></div><button class="sb" data-step="smooth" data-d="10" data-air>+</button><input type="range" id="smooth" min="0" max="100" value="60" hidden></div>
-      <div class="duo only2d"><label class="check tog"><input type="checkbox" id="fill"> Fill</label><label class="check tog" title="Turns hand-drawn strokes into straight lines with sharp corners (stars, polygons)"><input type="checkbox" id="straight"> 📐 Straight</label></div>
+      <div class="duo only2d"><label class="mini fsel" title="Shape fill: Solid uses colour B with an A outline; Gradient blends A → B"><select id="fillmode">
+          <option value="off">Fill: Off</option>
+          <option value="solid">Fill: Solid (B)</option>
+          <option value="gradient">Fill: Gradient A→B</option>
+        </select></label><label class="check tog" title="Turns hand-drawn strokes into straight lines with sharp corners (stars, polygons)"><input type="checkbox" id="straight"> 📐 Straight</label></div>
     </section>
 
     <section id="props2d">
