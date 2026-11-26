@@ -340,9 +340,8 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
   else if (!drawOn && handDrawing2d) { d2.end(2); handDrawing2d = false; }
 }
 function palmCenter(D) {
-  const lm = D.lm, r = ge.settings.reach, m = (1 - r) / 2;
-  const nx = Math.max(0, Math.min(1, ((1 - lm[9].x) - m) / r)), ny = Math.max(0, Math.min(1, (lm[9].y - m) / r));
-  return [nx * innerWidth - stageRect.left, ny * innerHeight - stageRect.top];
+  // eraser stays exactly where the pointing cursor was (same smoothed point), no jump to the palm centre
+  return [D.x * innerWidth - stageRect.left, D.y * innerHeight - stageRect.top];
 }
 
 function handle3d(f, t, D, Sp, dp, sp, drawOn, drawStart, overUI) {
