@@ -25,7 +25,7 @@ Click **▶ Start camera** and allow camera access.
 
 ## Gestures
 
-The draw hand is your dominant hand, set in ⚙. When only one hand is visible it always acts as the draw hand.
+The draw hand is your dominant hand, set in ⚙. Each hand is tracked by position and keeps its role while both stay in view, so the hands can't swap mid-gesture. If only the control hand is visible it doesn't draw, unless you turn on *One visible hand always draws* in ⚙.
 
 | Draw hand | Action |
 |---|---|
