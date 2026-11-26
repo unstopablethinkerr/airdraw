@@ -3,6 +3,7 @@ import { HandTracker } from './tracker.js';
 import { GestureEngine, POSE_ICON, HAND_CONNECTIONS } from './gestures.js';
 import { Draw2D, SHAPES } from './draw2d.js';
 import { Draw3D, PRIMS } from './draw3d.js';
+import { Tutorial } from './tutorial.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -15,7 +16,7 @@ const S = {
   mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false,
   symmetry: 'none', depthRange: 50,
 };
-const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swap: false, sound: true, oneHandDraws: false };
+const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swapLR: false, sound: true, oneHandDraws: false };
 try { Object.assign(SET, JSON.parse(localStorage.getItem('aircanvas.settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('aircanvas.settings', JSON.stringify(SET)); } catch {} };
 
@@ -139,10 +140,10 @@ function bindSet(id, key, num) {
 }
 bindSet('set-dominant', 'dominant'); bindSet('set-trigger', 'trigger'); bindSet('set-reach', 'reach', true); bindSet('set-pinch', 'pinch', true);
 bindSet('set-dwell', 'dwell', true); bindSet('set-quality', 'quality'); bindSet('set-delegate', 'delegate');
-bindSet('set-skeleton', 'skeleton'); bindSet('set-swap', 'swap'); bindSet('set-onehand', 'oneHandDraws'); bindSet('set-sound', 'sound');
+bindSet('set-skeleton', 'skeleton'); bindSet('set-swap', 'swapLR'); bindSet('set-onehand', 'oneHandDraws'); bindSet('set-sound', 'sound');
 function applySettings(changed) {
-  Object.assign(ge.settings, { dominant: SET.dominant, reach: SET.reach / 100, pinch: SET.pinch / 100, swap: SET.swap, trigger: SET.trigger, oneHandDraws: SET.oneHandDraws });
-  ge.tracks.forEach(tr => tr.role = null); // re-evaluate roles with new settings
+  Object.assign(ge.settings, { dominant: SET.dominant, reach: SET.reach / 100, pinch: SET.pinch / 100, swap: SET.swapLR, trigger: SET.trigger, oneHandDraws: SET.oneHandDraws });
+  if (['swapLR', 'dominant', 'oneHandDraws'].includes(changed)) ge.tracks = []; // re-learn hand roles
   tracker.setQuality(SET.quality);
   if (changed === 'delegate' && tracker.landmarker) tracker.loadModel(SET.delegate).then(() => toast('Processor: ' + tracker.delegate)).catch(e => toast('Model error: ' + e.message));
   $('#hc-dom .ht').textContent = `Draw hand (${SET.dominant})`;
@@ -190,6 +191,7 @@ cm.addEventListener('pointerup', () => { if (!handDrawing2d) d2.end(); });
 
 // ---------------- events ----------------
 function doEvent(type) {
+  tutor?.notify(type);
   const eng = S.mode === '2d' ? d2 : d3;
   switch (type) {
     case 'undo': if (eng.undo()) { toast('↶ Undo'); beep(520); } break;
@@ -266,6 +268,7 @@ function airClick(el) {
   if (el.tagName === 'SELECT') { el.selectedIndex = (el.selectedIndex + 1) % el.options.length; el.dispatchEvent(new Event('change')); toast(el.options[el.selectedIndex].text); }
   else if (el.matches('label.check')) { const cb = el.querySelector('input'); cb.checked = !cb.checked; cb.dispatchEvent(new Event('change')); }
   else el.click();
+  tutor?.notify('airclick', el);
   beep(1000); el.classList.add('air-hover'); setTimeout(() => el.classList.remove('air-hover'), 250);
 }
 
@@ -294,9 +297,11 @@ function onResults(res, t) {
   } else { G.dwellEl = null; G.dwellP = 0; }
 
   if (modalOpen) { endAllInteractions(); return updateFeedback(f, t); }
+  if (tutor?.active && S.mode !== '2d') setMode('2d');
   if (S.mode === '2d') handle2d(f, t, D, Sp, st(dp), st(sp), drawOn, drawStart, !!uiEl);
   else handle3d(f, t, D, Sp, dp, sp, drawOn, drawStart, !!uiEl);
   updateFeedback(f, t);
+  tutor?.tick(f, t);
 }
 
 function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
@@ -528,4 +533,17 @@ window.addEventListener('resize', () => { clearTimeout(onResize.t); onResize.t =
   // preload model in background so camera start is quick
   setTimeout(() => tracker.loadModel(SET.delegate).catch(e => { console.error(e); setPill('#st-model', 'bad', 'Model failed: ' + e.message); }), 300);
 })();
-window.AirCanvas = { d2, d3, ge, tracker, S, SET, onResults, G, applyProject, projectData, doEvent }; // handy for debugging in DevTools
+// ---------------- tutorial ----------------
+var tutor = new Tutorial({
+  S, SET, G,
+  startCamera: () => { if (!tracker.running) $('#btn-camera').click(); },
+  isCameraOn: () => tracker.running,
+  swapHands: () => { SET.swapLR = !SET.swapLR; $('#set-swap').checked = SET.swapLR; applySettings('swapLR'); saveSettings(); },
+  snapshot: () => JSON.parse(JSON.stringify(projectData())),
+  restore: (p) => applyProject(p),
+  setMode, setTool: setTool2d, clearDoc: () => { d2.doc.strokes = []; d2.undoStack = []; d2.redoStack = []; d2.renderAll(); },
+  beep, toast,
+});
+$('#btn-tutorial').onclick = () => tutor.start();
+try { if (!localStorage.getItem('aircanvas.tutorialDone')) setTimeout(() => tutor.start(), 600); } catch {}
+window.AirCanvas = { d2, d3, ge, tracker, S, SET, onResults, G, tutor, applyProject, projectData, doEvent }; // handy for debugging in DevTools

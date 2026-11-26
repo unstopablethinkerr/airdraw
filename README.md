@@ -23,7 +23,13 @@ Click **▶ Start camera** and allow camera access.
 
 **Feedback:** status pills for camera, model (GPU/CPU), hand count and fps/latency. The live skeleton preview labels hands DRAW and CTRL. Per-hand cards show the pose, pinch strength, confidence and current action. Hold-progress rings, dwell rings, and hints cover no hand, too close, too far and low light.
 
+## Tutorial
+
+On first launch an interactive tutorial opens. Reopen it any time with 🎓 Tutorial. Each step watches your hands and moves on only when you've done the gesture: draw hand, both hands, pointing at targets, pinch drawing, pen up/down, air-click, colour, size, tool, palm eraser and two-hand shape. If your camera reports left and right reversed, it fixes that automatically. Your drawing is saved before the tutorial and restored after.
+
 ## Gestures
+
+**Undo / Redo are buttons only.** Point at them or pinch on them, so nothing is undone by accident.
 
 The draw hand is your dominant hand, set in ⚙. Each hand is tracked by position and keeps its role while both stay in view, so the hands can't swap mid-gesture. If only the control hand is visible it doesn't draw, unless you turn on *One visible hand always draws* in ⚙.
 
@@ -36,8 +42,6 @@ The draw hand is your dominant hand, set in ⚙. Each hand is tracked by positio
 
 | Control hand | Action |
 |---|---|
-| ✊ hold | Undo (repeats while held) |
-| 👍 hold | Redo |
 | ✌️ | Next colour |
 | 🤟 three fingers | Next tool |
 | 🤏 + move up/down | 2D brush size · 3D depth plane, or scale the selected object |

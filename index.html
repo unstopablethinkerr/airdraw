@@ -33,6 +33,7 @@
     </div>
     <div class="top-actions">
       <button id="btn-camera" class="btn primary" data-air>▶ Start camera</button>
+      <button id="btn-tutorial" class="btn" data-air>🎓 Tutorial</button>
       <button id="btn-help" class="btn" data-air>❔ Gestures</button>
       <button id="btn-settings" class="btn" data-air>⚙</button>
     </div>
@@ -60,6 +61,12 @@
 
   <!-- ============ LEFT TOOLBAR ============ -->
   <aside id="toolbar" class="panel">
+    <div class="group history">
+      <div class="glabel">History</div>
+      <button class="tool" id="btn-undo" data-air title="Undo (Ctrl+Z)">↶<span>Undo</span></button>
+      <button class="tool" id="btn-redo" data-air title="Redo (Ctrl+Y)">↷<span>Redo</span></button>
+      <button class="tool" id="btn-clear" data-air title="Clear">🗑️<span>Clear</span></button>
+    </div>
     <div class="group" id="tools2d">
       <div class="glabel">Draw</div>
       <button class="tool active" data-tool="pen" data-air title="Pen">✒️<span>Pen</span></button>
@@ -92,16 +99,31 @@
       <button class="tool" data-tool3="select" data-air title="Select / move / rotate">✋<span>Select</span></button>
       <button class="tool" data-tool3="erase" data-air title="Delete on pinch">🧽<span>Delete</span></button>
     </div>
-    <div class="group">
-      <div class="glabel">History</div>
-      <button class="tool" id="btn-undo" data-air title="Undo (Ctrl+Z)">↶<span>Undo</span></button>
-      <button class="tool" id="btn-redo" data-air title="Redo (Ctrl+Y)">↷<span>Redo</span></button>
-      <button class="tool" id="btn-clear" data-air title="Clear">🗑️<span>Clear</span></button>
-    </div>
   </aside>
 
   <!-- ============ RIGHT PANEL ============ -->
   <aside id="props" class="panel">
+    <section>
+      <h4>File</h4>
+      <div class="row wrap">
+        <button class="btn sm" id="btn-new" data-air>New</button>
+        <button class="btn sm" id="btn-open" data-air>📂 Open</button>
+        <button class="btn sm" id="btn-save" data-air>💾 Save project</button>
+      </div>
+      <div class="row wrap" id="export2d">
+        <button class="btn sm primary" id="btn-png" data-air>⬇ PNG</button>
+        <button class="btn sm" id="btn-jpg" data-air>⬇ JPG</button>
+        <button class="btn sm" id="btn-svg" data-air>⬇ SVG</button>
+      </div>
+      <div class="row wrap hidden" id="export3d">
+        <button class="btn sm primary" id="btn-stl" data-air>⬇ STL</button>
+        <button class="btn sm" id="btn-glb" data-air>⬇ GLB</button>
+        <button class="btn sm" id="btn-obj" data-air>⬇ OBJ</button>
+        <button class="btn sm" id="btn-shot" data-air>⬇ PNG view</button>
+      </div>
+      <input type="file" id="file-open" accept=".json,.aircanvas,application/json" hidden>
+      <div class="muted small" id="autosave-info">Autosave: on</div>
+    </section>
     <section>
       <h4>Color</h4>
       <div id="swatches" class="swatches"></div>
@@ -175,27 +197,6 @@
       <div id="sel-info" class="muted">Nothing selected</div>
     </section>
 
-    <section>
-      <h4>File</h4>
-      <div class="row wrap">
-        <button class="btn sm" id="btn-new" data-air>New</button>
-        <button class="btn sm" id="btn-open" data-air>📂 Open</button>
-        <button class="btn sm" id="btn-save" data-air>💾 Save project</button>
-      </div>
-      <div class="row wrap" id="export2d">
-        <button class="btn sm primary" id="btn-png" data-air>⬇ PNG</button>
-        <button class="btn sm" id="btn-jpg" data-air>⬇ JPG</button>
-        <button class="btn sm" id="btn-svg" data-air>⬇ SVG</button>
-      </div>
-      <div class="row wrap hidden" id="export3d">
-        <button class="btn sm primary" id="btn-stl" data-air>⬇ STL</button>
-        <button class="btn sm" id="btn-glb" data-air>⬇ GLB</button>
-        <button class="btn sm" id="btn-obj" data-air>⬇ OBJ</button>
-        <button class="btn sm" id="btn-shot" data-air>⬇ PNG view</button>
-      </div>
-      <input type="file" id="file-open" accept=".json,.aircanvas,application/json" hidden>
-      <div class="muted small" id="autosave-info">Autosave: on</div>
-    </section>
   </aside>
 
   <!-- ============ CAMERA PREVIEW + FEEDBACK ============ -->
@@ -208,6 +209,20 @@
     <div class="hcard" id="hc-dom"><div class="ht">Draw hand</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
     <div class="hcard" id="hc-sup"><div class="ht">Control hand</div><div class="hp">—</div><div class="hm"><div class="pm"></div></div><div class="hs"></div></div>
     <div class="hcard combo" id="hc-combo"><div class="ht">Combo</div><div class="hp">—</div></div>
+  </div>
+
+  <!-- ============ TUTORIAL ============ -->
+  <div id="tutor-targets"></div>
+  <div id="tutor" class="panel hidden">
+    <div class="tu-head"><span id="tu-count">Step 1</span><button class="btn sm" id="tu-exit" data-air>✕ Exit tutorial</button></div>
+    <div class="tu-main"><div id="tu-icon">👋</div><div><h3 id="tu-title"></h3><div id="tu-text"></div></div></div>
+    <div class="tu-barwrap"><div id="tu-bar"></div></div>
+    <div id="tu-status" class="tu-status"></div>
+    <div class="tu-foot">
+      <button class="btn sm" id="tu-back" data-air>‹ Back</button>
+      <button class="btn sm primary hidden" id="tu-action" data-air></button>
+      <button class="btn sm" id="tu-skip" data-air>Skip ›</button>
+    </div>
   </div>
 
   <!-- ============ HELP MODAL ============ -->
@@ -229,8 +244,6 @@
         <div>
           <h3>Control hand</h3>
           <table>
-            <tr><td>✊ Fist (hold)</td><td>Undo</td></tr>
-            <tr><td>👍 Thumb up (hold)</td><td>Redo</td></tr>
             <tr><td>✌️ Peace</td><td>Next colour</td></tr>
             <tr><td>🤟 Three fingers</td><td>Next tool</td></tr>
             <tr><td>🤏 Pinch + move up/down</td><td>2D: brush size · 3D: depth / scale selected</td></tr>
@@ -250,6 +263,7 @@
         </div>
       </div>
       <h3>Tips for good tracking</h3>
+      <p class="muted"><b>Undo / Redo</b> are buttons only (left toolbar). Point at them, or pinch on them, so nothing is undone by accident.</p>
       <ul class="muted">
         <li>Good front lighting, plain background, hand 40–80 cm from the camera.</li>
         <li>Keep the whole hand in view; palm facing the camera works best.</li>
@@ -285,7 +299,7 @@
       </label>
       <label class="check"><input type="checkbox" id="set-skeleton" checked> Show hand skeleton in preview</label>
       <label class="check"><input type="checkbox" id="set-onehand"> One visible hand always draws (any hand)</label>
-      <label class="check"><input type="checkbox" id="set-swap"> Swap left/right detection</label>
+      <label class="check"><input type="checkbox" id="set-swap"> Swap left/right (if DRAW/CTRL labels look reversed)</label>
       <label class="check"><input type="checkbox" id="set-sound" checked> Click sounds</label>
       <p class="muted small">Settings are saved in this browser.</p>
     </div>

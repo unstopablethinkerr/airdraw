@@ -41,7 +41,7 @@ function classify(lm, ar, pinchOn, pinchThresh) {
   return { pose, pinch: pose === 'PINCH', pinchDist, scale };
 }
 
-const HOLD_MS = { undo: 550, redo: 550, mode: 900, download: 900, clear: 1500, save: 1000 };
+const HOLD_MS = { mode: 900, download: 900, clear: 1500, save: 1000 };
 
 class HandState {
   constructor(role) {
@@ -143,7 +143,7 @@ export class GestureEngine {
       for (let i = 0; i < res.landmarks.length; i++) {
         const lm = res.landmarks[i];
         const hd = res.handedness?.[i]?.[0] || res.handednesses?.[i]?.[0];
-        let side = hd ? (hd.categoryName === 'Left' ? 'Right' : 'Left') : 'Right'; // un-mirrored input → invert
+        let side = hd ? hd.categoryName : 'Right'; // matches the user's own hand when sitting in front of a laptop camera
         if (this.settings.swap) side = side === 'Left' ? 'Right' : 'Left';
         list.push({ lm, side, score: hd ? hd.score : 0, cx: 1 - lm[9].x, cy: lm[9].y });
       }
@@ -213,9 +213,7 @@ export class GestureEngine {
     else if (two && dp === 'PINCH' && sp === 'PINCH') combo = '🤏🤏 Two-hand';
     else if (two && dp === 'POINT' && sp === 'OPEN') combo = '☝️✋ Ruler line';
     else if (S.present) {
-      if (sp === 'FIST') want.undo = true;
-      else if (sp === 'THUMB') want.redo = true;
-      else if (sp === 'ROCK') want.mode = true;
+      if (sp === 'ROCK') want.mode = true; // undo/redo are buttons only (no fist/thumb gestures)
     }
     if (S.present && S.edges.poseChanged !== undefined && !two_same(dp, sp)) {
       if (sp === 'PEACE' && dp !== 'PEACE') events.push({ type: 'nextColor' });
@@ -230,8 +228,6 @@ export class GestureEngine {
           hld.progress = Math.min(1, (t - hld.start) / HOLD_MS[key]);
           if (hld.progress >= 1 && !hld.fired) {
             hld.fired = true; events.push({ type: key });
-            // undo/redo auto-repeat while held
-            if (key === 'undo' || key === 'redo') { hld.start = t + 250; hld.fired = false; hld.progress = 0; }
           }
         }
       } else delete this.holds[key];

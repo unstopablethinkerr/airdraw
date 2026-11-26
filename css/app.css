@@ -56,6 +56,8 @@ button{font:inherit;color:inherit}
 .tool{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;height:50px;border:1px solid transparent;
   background:var(--panel2);border-radius:10px;cursor:pointer;font-size:19px;line-height:1}
 .tool span{font-size:10px;color:var(--muted)}
+.history{position:sticky;top:-6px;background:#171a23;z-index:2;padding:6px 0 6px;margin:-6px 0 6px;border-bottom:1px solid var(--line)}
+.history .tool{height:44px}
 .tool:hover{border-color:var(--line)}
 .tool.active{border-color:var(--acc);background:#22315a}
 .tool.active span{color:#cfe0ff}
@@ -107,3 +109,21 @@ select{width:100%;background:var(--panel2);color:var(--text);border:1px solid va
 @media (max-width:900px){.gcols{grid-template-columns:1fr} .status .pill:not(#st-hands){display:none} #props{width:190px}}
 
 .air-hover{outline:2px solid #ffd76a!important;outline-offset:2px}
+
+/* ---------- tutorial ---------- */
+#tutor{position:fixed;left:50%;top:64px;transform:translateX(-50%);width:min(470px,92vw);padding:12px 16px;z-index:45;border-color:#4f8cff;box-shadow:0 10px 40px #0008}
+.tu-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted)}
+.tu-main{display:flex;gap:14px;align-items:flex-start;margin-top:8px}
+#tu-icon{font-size:42px;line-height:1;min-width:52px;text-align:center}
+#tu-title{margin:2px 0 6px;font-size:17px}
+#tu-text{font-size:14px;line-height:1.45}
+.tu-barwrap{height:8px;background:var(--panel2);border-radius:6px;margin:12px 0 6px;overflow:hidden}
+#tu-bar{height:100%;width:0;background:linear-gradient(90deg,#4f8cff,#2ecc71);transition:width .15s}
+.tu-status{min-height:18px;font-size:13px;color:var(--warn)} .tu-status.ok{color:var(--ok)}
+.tu-foot{display:flex;justify-content:space-between;gap:8px;margin-top:8px}
+.tu-foot .btn{min-height:40px;min-width:90px}
+#tutor-targets{position:fixed;inset:0;pointer-events:none;z-index:44}
+.tu-target{position:absolute;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:#ffd76a55;border:3px solid #ffd76a;animation:pulse 1.2s infinite}
+.tu-target.hit{background:#2ecc7166;border-color:#2ecc71;animation:none}
+@keyframes pulse{50%{transform:scale(1.15)}}
+.tu-glow{box-shadow:0 0 0 3px #ffd76a,0 0 18px #ffd76a!important;animation:pulse 1.2s infinite}
