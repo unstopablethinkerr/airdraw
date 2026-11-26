@@ -215,7 +215,7 @@
     <div class="modal-body">
       <button class="close" data-close data-air>✕</button>
       <h2>Gesture guide</h2>
-      <p class="muted">The <b>draw hand</b> is your dominant hand (set in ⚙). With one hand visible, it always acts as the draw hand.</p>
+      <p class="muted">The <b>draw hand</b> is your dominant hand (set in ⚙). Each hand keeps its role while both stay in view. The control hand alone never draws (change in ⚙).</p>
       <div class="gcols">
         <div>
           <h3>Draw hand</h3>
@@ -284,6 +284,7 @@
         <select id="set-delegate"><option value="GPU">GPU (recommended)</option><option value="CPU">CPU</option></select>
       </label>
       <label class="check"><input type="checkbox" id="set-skeleton" checked> Show hand skeleton in preview</label>
+      <label class="check"><input type="checkbox" id="set-onehand"> One visible hand always draws (any hand)</label>
       <label class="check"><input type="checkbox" id="set-swap"> Swap left/right detection</label>
       <label class="check"><input type="checkbox" id="set-sound" checked> Click sounds</label>
       <p class="muted small">Settings are saved in this browser.</p>
