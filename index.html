@@ -90,6 +90,11 @@
       <button class="tool" data-tool="triangle" data-air title="Triangle">△<span>Tri</span></button>
       <button class="tool" data-tool="arrow" data-air title="Arrow">➜<span>Arrow</span></button>
       <button class="tool" data-tool="star" data-air title="Star">☆<span>Star</span></button>
+      <div class="glabel">Edit</div>
+      <button class="tool" data-tool="select" data-air title="Select: pinch an object to move it, pinch a corner square to resize">✋<span>Select</span></button>
+      <button class="tool" id="btn-snap" data-air title="Snap to grid, object corners and 15° angles">🧲<span>Snap</span></button>
+      <button class="tool" id="sel2-dup" data-air title="Duplicate selected">⧉<span>Copy</span></button>
+      <button class="tool" id="sel2-del" data-air title="Delete selected">❌<span>Delete</span></button>
     </div>
     <div class="group hidden" id="tools3d">
       <div class="glabel">Create</div>
@@ -246,6 +251,7 @@
             <tr><td>☝️ Point</td><td>Move cursor. Hold over any button ≈0.8 s to click it.</td></tr>
             <tr><td>🤏 Pinch</td><td>Draw / place / grab (thumb + index).</td></tr>
             <tr><td>✋ Open palm</td><td>2D: palm eraser. 3D: release.</td></tr>
+            <tr><td>🤏 with ✋ Select tool</td><td>2D: pinch an object to move it, pinch a corner square to resize</td></tr>
             <tr><td>✊ Fist</td><td>Pen up / pause.</td></tr>
           </table>
         </div>
@@ -255,7 +261,7 @@
             <tr><td>✌️ Peace</td><td>Next colour</td></tr>
             <tr><td>🤟 Three fingers</td><td>Next tool</td></tr>
             <tr><td>✊ Fist + move</td><td>2D: move the paper (when zoomed in)</td></tr>
-            <tr><td>🤏 Pinch + move up/down</td><td>2D: brush size · 3D: depth / scale selected</td></tr>
+            <tr><td>🤏 Pinch + move up/down</td><td>2D: brush size, or scale the selected object · 3D: depth / scale selected</td></tr>
             <tr><td>🤘 Rock (hold)</td><td>Switch 2D ⇄ 3D</td></tr>
           </table>
         </div>

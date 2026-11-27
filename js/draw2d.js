@@ -98,15 +98,26 @@ export class Draw2D {
   // ---------------- strokes ----------------
   _push() { this.undoStack.push(this.doc.strokes.slice()); if (this.undoStack.length > 300) this.undoStack.shift(); this.redoStack = []; }
   begin(tool, p, o) {
-    const [x, y] = this.toDoc(p[0], p[1]);
+    let [x, y] = this.toDoc(p[0], p[1]);
+    if (this.snapOn && SHAPES.includes(tool)) [x, y] = this.snapPt(x, y);
     this.cur = { tool, color: o.color, color2: o.color2, size: o.size, opacity: o.opacity, sym: o.sym, fill: !!o.fill, fillMode: o.fillMode || (o.fill ? 'gradient' : 'off'), seed: (Math.random() * 1e9) | 0, pts: [[x, y, 1]], t: performance.now() };
     if (SHAPES.includes(tool)) this.cur.pts.push([x, y, 1]);
     this.renderLive();
   }
   add(p) {
     const c = this.cur; if (!c) return;
-    const [x, y] = this.toDoc(p[0], p[1]);
-    if (SHAPES.includes(c.tool)) { c.pts[1] = [x, y, 1]; this.renderLive(); return; }
+    let [x, y] = this.toDoc(p[0], p[1]);
+    if (SHAPES.includes(c.tool)) {
+      if (this.snapOn) {
+        if (c.tool === 'line' || c.tool === 'arrow') { // 15° angle steps, length to grid
+          const [x0, y0] = c.pts[0], a = Math.round(Math.atan2(y - y0, x - x0) / (Math.PI / 12)) * (Math.PI / 12);
+          const near = this._nearKey(x, y);
+          if (near) [x, y] = near;
+          else { const L = Math.round(Math.hypot(x - x0, y - y0) / this.gridSize()) * this.gridSize(); x = x0 + Math.cos(a) * L; y = y0 + Math.sin(a) * L; }
+        } else [x, y] = this.snapPt(x, y);
+      }
+      c.pts[1] = [x, y, 1]; this.renderLive(); return;
+    }
     const last = c.pts[c.pts.length - 1], dist = Math.hypot(x - last[0], y - last[1]);
     if (dist < 1.2) return;
     const now = performance.now(), dt = Math.max(1, now - c.t); c.t = now;
@@ -126,7 +137,7 @@ export class Draw2D {
         const span = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
         const p = rdp(smoothPts(resample(c.pts, 3), 3, 2), Math.max(7, span * 0.022));
         if (p.length > 3 && Math.hypot(p[0][0] - p[p.length - 1][0], p[0][1] - p[p.length - 1][1]) < 35) p[p.length - 1] = [...p[0]];
-        c.pts = p.map(q => [q[0], q[1], 1]); c.poly = true;
+        c.pts = p.map(q => (this.snapOn ? [...this.snapPt(q[0], q[1]), 1] : [q[0], q[1], 1])); c.poly = true;
       } else c.pts = rdp(smoothPts(resample(c.pts, 2.5), 3, 2), 0.3);
     }
     if (SHAPES.includes(c.tool) && Math.hypot(c.pts[1][0] - c.pts[0][0], c.pts[1][1] - c.pts[0][1]) < 4) { this.renderLive(); return; }
@@ -153,18 +164,109 @@ export class Draw2D {
     }
   }
 
-  undo() { if (!this.undoStack.length) return false; this.redoStack.push(this.doc.strokes); this.doc.strokes = this.undoStack.pop(); this.renderAll(); this.onChange(); return true; }
-  redo() { if (!this.redoStack.length) return false; this.undoStack.push(this.doc.strokes); this.doc.strokes = this.redoStack.pop(); this.renderAll(); this.onChange(); return true; }
-  clear() { if (!this.doc.strokes.length) return; this._push(); this.doc.strokes = []; this.renderAll(); this.onChange(); }
+  undo() { this.sel = null; if (!this.undoStack.length) return false; this.redoStack.push(this.doc.strokes); this.doc.strokes = this.undoStack.pop(); this.renderAll(); this.onChange(); return true; }
+  redo() { this.sel = null; if (!this.redoStack.length) return false; this.undoStack.push(this.doc.strokes); this.doc.strokes = this.redoStack.pop(); this.renderAll(); this.onChange(); return true; }
+  clear() { this.sel = null; if (!this.doc.strokes.length) return; this._push(); this.doc.strokes = []; this.renderAll(); this.onChange(); }
 
   renderAll() {
     const ctx = this.mx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.main.width, this.main.height);
     this._apply(ctx);
-    for (const s of this.doc.strokes) this._renderStroke(ctx, s);
+    this.doc.strokes.forEach((s, i) => { if (i !== this.editing) this._renderStroke(ctx, s); });
   }
   renderLive() {
     const ctx = this.lx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.live.width, this.live.height);
     if (this.cur && this.cur.tool !== 'eraser') { this._apply(ctx); this._renderStroke(ctx, this.cur); }
+    const st = this.doc.strokes[this.sel];
+    if (st) { // selection: the object being edited + dashed box with corner handles
+      this._apply(ctx);
+      if (this.editing === this.sel) this._renderStroke(ctx, st);
+      const [x0, y0, x1, y1] = bboxOf(st), k = 1 / this.view.s, h = 7 * k;
+      ctx.save(); ctx.setLineDash([6 * k, 4 * k]); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5 * k;
+      ctx.strokeRect(x0, y0, x1 - x0, y1 - y0); ctx.setLineDash([]); ctx.fillStyle = '#fff';
+      for (const [cx, cy] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) { ctx.fillRect(cx - h, cy - h, 2 * h, 2 * h); ctx.strokeRect(cx - h, cy - h, 2 * h, 2 * h); }
+      ctx.restore();
+    }
+  }
+
+  // ---------------- snapping ----------------
+  gridSize() { return { grid: 32, dots: 24, lined: 34, blueprint: 24 }[this.doc.layout] || 24; }
+  _keys() { // corners / ends of existing objects
+    if (this._keyCache && this._keyN === this.doc.strokes.length) return this._keyCache;
+    const K = [];
+    for (const s of this.doc.strokes) {
+      if (s.tool === 'eraser' || s.tool === 'spray') continue;
+      if (SHAPES.includes(s.tool)) { const [x0, y0, x1, y1] = bboxOf(s, 0); K.push([x0, y0], [x1, y0], [x1, y1], [x0, y1], [(x0 + x1) / 2, (y0 + y1) / 2]); if (s.tool === 'line' || s.tool === 'arrow') K.push(s.pts[0], s.pts[1]); }
+      else if (s.poly) K.push(...s.pts);
+      else K.push(s.pts[0], s.pts[s.pts.length - 1]);
+    }
+    this._keyCache = K; this._keyN = this.doc.strokes.length; return K;
+  }
+  _nearKey(x, y) {
+    let best = null, bd = 14 / this.view.s;
+    for (const k of this._keys()) { const d = Math.hypot(k[0] - x, k[1] - y); if (d < bd) { bd = d; best = [k[0], k[1]]; } }
+    return best;
+  }
+  snapPt(x, y) { const n = this._nearKey(x, y); if (n) return n; const g = this.gridSize(); return [Math.round(x / g) * g, Math.round(y / g) * g]; }
+
+  // ---------------- select / move / resize ----------------
+  // returns {idx, mode:'move'|'resize', corner} for a stage point, or null
+  hitTest(p) {
+    const [x, y] = this.toDoc(p[0], p[1]), tol = 12 / this.view.s;
+    const cur = this.doc.strokes[this.sel];
+    if (cur) {
+      const [x0, y0, x1, y1] = bboxOf(cur), C = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      for (let i = 0; i < 4; i++) if (Math.hypot(C[i][0] - x, C[i][1] - y) < tol * 1.6) return { idx: this.sel, mode: 'resize', corner: i };
+      if (x > x0 - tol && x < x1 + tol && y > y0 - tol && y < y1 + tol) return { idx: this.sel, mode: 'move' };
+    }
+    for (let i = this.doc.strokes.length - 1; i >= 0; i--) {
+      const s = this.doc.strokes[i]; if (s.tool === 'eraser') continue;
+      const [x0, y0, x1, y1] = bboxOf(s);
+      if (x < x0 - tol || x > x1 + tol || y < y0 - tol || y > y1 + tol) continue;
+      if (SHAPES.includes(s.tool) || s.tool === 'spray') return { idx: i, mode: 'move' };
+      for (let j = 0; j < s.pts.length; j++) { const a = s.pts[Math.max(0, j - 1)], b = s.pts[j]; if (segDist(x, y, a, b) < s.size / 2 + tol) return { idx: i, mode: 'move' }; }
+    }
+    return null;
+  }
+  select(idx) { this.sel = idx ?? null; this.renderLive(); this.onSelect?.(this.sel); }
+  startEdit(hit, p) {
+    this._push();
+    const s = JSON.parse(JSON.stringify(this.doc.strokes[hit.idx])); this.doc.strokes[hit.idx] = s; // edit a copy: undo keeps the original
+    this.sel = this.editing = hit.idx;
+    this.ed = { ...hit, orig: s.pts.map(q => q.slice()), box: bboxOf(s, 0), start: this.toDoc(p[0], p[1]) };
+    this.renderAll(); this.renderLive();
+  }
+  dragEdit(p) {
+    const e = this.ed, s = this.doc.strokes[this.editing]; if (!e || !s) return;
+    const [x, y] = this.toDoc(p[0], p[1]); const [bx0, by0, bx1, by1] = e.box;
+    if (e.mode === 'move') {
+      let dx = x - e.start[0], dy = y - e.start[1];
+      if (this.snapOn) { const [sx, sy] = this.snapPt(bx0 + dx, by0 + dy); dx = sx - bx0; dy = sy - by0; }
+      s.pts = e.orig.map(q => [q[0] + dx, q[1] + dy, q[2]]);
+    } else if (e.mode === 'resize') {
+      const C = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]], A = C[(e.corner + 2) % 4], P = C[e.corner];
+      let [nx, ny] = this.snapOn ? this.snapPt(x, y) : [x, y];
+      const fx = (P[0] - A[0]) ? (nx - A[0]) / (P[0] - A[0]) : 1, fy = (P[1] - A[1]) ? (ny - A[1]) / (P[1] - A[1]) : 1;
+      const cl = (f) => (Math.abs(f) < 0.05 ? (f < 0 ? -0.05 : 0.05) : f);
+      s.pts = e.orig.map(q => [A[0] + (q[0] - A[0]) * cl(fx), A[1] + (q[1] - A[1]) * cl(fy), q[2]]);
+    }
+    this._keyCache = null; this.renderLive();
+  }
+  scaleEdit(f) { // uniform scale around the centre (control-hand pinch)
+    const e = this.ed, s = this.doc.strokes[this.editing]; if (!e || !s) return;
+    const cx = (e.box[0] + e.box[2]) / 2, cy = (e.box[1] + e.box[3]) / 2, k = Math.max(0.05, Math.min(20, f));
+    s.pts = e.orig.map(q => [cx + (q[0] - cx) * k, cy + (q[1] - cy) * k, q[2]]); this.renderLive();
+  }
+  endEdit() {
+    if (this.editing == null) return;
+    const s = this.doc.strokes[this.editing];
+    if (s) s.pts = s.pts.map(q => [Math.round(q[0] * 10) / 10, Math.round(q[1] * 10) / 10, q[2]]);
+    this.editing = null; this.ed = null; this._keyCache = null; this.renderAll(); this.renderLive(); this.onChange();
+  }
+  deleteSelected() { if (this.sel == null) return false; this._push(); this.doc.strokes = this.doc.strokes.filter((_, i) => i !== this.sel); this.sel = null; this._keyCache = null; this.renderAll(); this.renderLive(); this.onChange(); return true; }
+  duplicateSelected() {
+    const s = this.doc.strokes[this.sel]; if (!s) return false; this._push();
+    const c = JSON.parse(JSON.stringify(s)); c.seed = (Math.random() * 1e9) | 0; c.pts = c.pts.map(q => [q[0] + 24, q[1] + 24, q[2]]);
+    this.doc.strokes.push(c); this.sel = this.doc.strokes.length - 1; this._keyCache = null; this.renderAll(); this.renderLive(); this.onChange(); return true;
   }
   _renderStroke(ctx, s) {
     for (const T of symTransforms(s.sym, this.doc.width, this.doc.height)) {
@@ -204,7 +306,7 @@ export class Draw2D {
     return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>${bgRect}${content}</svg>`;
   }
   serialize() { return JSON.parse(JSON.stringify(this.doc)); }
-  load(doc) { this.doc = { width: doc.width || 1280, height: doc.height || 720, layout: doc.layout || 'white', strokes: doc.strokes || [] }; this.undoStack = []; this.redoStack = []; this.resize(); this.onChange(); }
+  load(doc) { this.sel = null; this.editing = null; this._keyCache = null; this.doc = { width: doc.width || 1280, height: doc.height || 720, layout: doc.layout || 'white', strokes: doc.strokes || [] }; this.undoStack = []; this.redoStack = []; this.resize(); this.onChange(); }
 }
 
 function coverImage(ctx, img, W, H) {
@@ -237,6 +339,18 @@ export function drawLayout(ctx, layout, W, H) {
 }
 function grid(ctx, W, H, g) { ctx.beginPath(); for (let x = g; x < W; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, H); } for (let y = g; y < H; y += g) { ctx.moveTo(0, y); ctx.lineTo(W, y); } ctx.stroke(); }
 
+// ---- geometry helpers ----
+function bboxOf(s, padIt = 1) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const q of s.pts) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+  const pad = padIt ? (s.tool === 'spray' ? s.size * 1.6 : s.size / 2) : 0;
+  return [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
+}
+function segDist(x, y, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy;
+  const t = L ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L)) : 0;
+  return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy);
+}
 // ---- path clean-up helpers ----
 function resample(pts, step) {
   const out = [pts[0]]; let prev = pts[0], carry = 0;

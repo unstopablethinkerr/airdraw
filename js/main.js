@@ -8,12 +8,12 @@ import { Tutorial } from './tutorial.js';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const PALETTE = ['#111111', '#ffffff', '#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#00c7be', '#1e66f5', '#5856d6', '#af52de', '#ff2d92', '#8e5a2b'];
-const TOOLS2D = ['pen', 'brush', 'marker', 'calligraphy', 'neon', 'rainbow', 'gradient', 'spray', 'eraser', ...SHAPES];
+const TOOLS2D = ['pen', 'brush', 'marker', 'calligraphy', 'neon', 'rainbow', 'gradient', 'spray', 'eraser', ...SHAPES, 'select'];
 const TOOLS3D = ['stroke', 'ribbon', ...PRIMS, 'select', 'erase'];
 
 // ---------------- state ----------------
 const S = {
-  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false, fillMode: 'off', straighten: false,
+  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false, fillMode: 'off', straighten: false, snap: false,
   symmetry: 'none', depthRange: 50,
 };
 const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swapLR: false, sound: true, oneHandDraws: false };
@@ -98,7 +98,7 @@ $$('[data-view]').forEach(b => b.onclick = () => d3.setView(b.dataset.view));
 
 $$('[data-tool]').forEach(b => b.onclick = () => setTool2d(b.dataset.tool));
 $$('[data-tool3]').forEach(b => b.onclick = () => setTool3d(b.dataset.tool3));
-function setTool2d(t) { S.tool2d = t; $$('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t)); scheduleUISave(); }
+function setTool2d(t) { if (t !== 'select') d2.select(null); S.tool2d = t; $$('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t)); scheduleUISave(); }
 function setTool3d(t) { S.tool3d = t; $$('[data-tool3]').forEach(b => b.classList.toggle('active', b.dataset.tool3 === t)); d3.setMouseTool(t, () => S.colorA); if (t !== 'select') d3.select(null); scheduleUISave(); }
 
 $$('.tab').forEach(b => b.onclick = () => setMode(b.dataset.mode));
@@ -119,6 +119,10 @@ $('#zoom-in').onclick = () => S.mode === '3d' ? d3.zoom(0.8) : d2.setZoom(d2.zoo
 $('#zoom-out').onclick = () => S.mode === '3d' ? d3.zoom(1.25) : d2.setZoom(d2.zoom / 1.25);
 $('#zoom-fit').onclick = () => S.mode === '3d' ? d3.setView('front') : d2.resetView();
 $('#c-main').addEventListener('wheel', (e) => { e.preventDefault(); d2.setZoom(d2.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.offsetX, e.offsetY); }, { passive: false });
+function setSnap(on) { S.snap = d2.snapOn = !!on; $('#btn-snap').classList.toggle('active', S.snap); scheduleUISave(); }
+$('#btn-snap').onclick = () => { setSnap(!S.snap); toast(S.snap ? '🧲 Snap on: grid, corners, 15° angles' : 'Snap off'); };
+$('#sel2-dup').onclick = () => { if (!d2.duplicateSelected()) toast('Select an object first (✋ Select tool)'); };
+$('#sel2-del').onclick = () => { if (!d2.deleteSelected()) toast('Select an object first (✋ Select tool)'); };
 $('#btn-undo').onclick = () => doEvent('undo');
 $('#btn-redo').onclick = () => doEvent('redo');
 $('#btn-clear').onclick = () => { if (confirmClear()) doEvent('clear'); };
@@ -196,6 +200,7 @@ window.addEventListener('keydown', (e) => {
   else if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); doEvent('redo'); }
   else if ((e.ctrlKey || e.metaKey) && k === 's') { e.preventDefault(); saveProject(); }
   else if (k === 'delete' && S.mode === '3d') d3.remove(d3.selected);
+  else if ((k === 'delete' || k === 'backspace') && S.mode === '2d') d2.deleteSelected();
   else if (k === 'escape') { $$('.modal').forEach(m => m.classList.add('hidden')); d3.select(null); }
   else if (k === '[') { S.size = Math.max(1, S.size - 2); syncSize(); } else if (k === ']') { S.size = Math.min(80, S.size + 2); syncSize(); }
 });
@@ -203,9 +208,13 @@ function syncSize() { $('#size').value = S.size; $('#size-v').textContent = S.si
 
 // mouse / touch drawing in 2D
 const cm = $('#c-main');
-cm.addEventListener('pointerdown', (e) => { cm.setPointerCapture(e.pointerId); d2.begin(S.tool2d, [e.offsetX, e.offsetY], opts2d()); });
-cm.addEventListener('pointermove', (e) => { if (d2.cur && !handDrawing2d) { for (const ev of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) d2.add([ev.offsetX, ev.offsetY]); } });
-cm.addEventListener('pointerup', () => { if (!handDrawing2d) d2.end(); });
+cm.addEventListener('pointerdown', (e) => {
+  cm.setPointerCapture(e.pointerId); const p = [e.offsetX, e.offsetY];
+  if (S.tool2d === 'select') { const hit = d2.hitTest(p); if (hit) { d2.select(hit.idx); d2.startEdit(hit, p); G.mouseEdit = true; } else d2.select(null); return; }
+  d2.begin(S.tool2d, p, opts2d());
+});
+cm.addEventListener('pointermove', (e) => { if (G.mouseEdit) return d2.dragEdit([e.offsetX, e.offsetY]); if (d2.cur && !handDrawing2d) { for (const ev of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) d2.add([ev.offsetX, ev.offsetY]); } });
+cm.addEventListener('pointerup', () => { if (G.mouseEdit) { d2.endEdit(); G.mouseEdit = false; return; } if (!handDrawing2d) d2.end(); });
 
 // ---------------- events ----------------
 function doEvent(type) {
@@ -251,7 +260,7 @@ function applyProject(p) {
   if (p.d3) d3.load(p.d3);
   $('#layout').value = d2.doc.layout; $('#symmetry').value = S.symmetry; $('#material').value = d3.matMode; if (!S.fillMode) S.fillMode = S.fill ? 'gradient' : 'off'; $('#fillmode').value = S.fillMode;
   for (const id of ['size', 'opacity', 'smooth', 'depthRange']) { $('#' + id).value = S[id]; $('#' + id + '-v').textContent = S[id]; fillOf(id); }
-  $('#straight').checked = !!S.straighten;
+  $('#straight').checked = !!S.straighten; setSnap(S.snap);
   ge.setSmoothing(S.smooth / 100); syncSize();
   setColor(S.colorA); setTool2d(S.tool2d); setTool3d(S.tool3d); setMode(p.mode || S.mode);
 }
@@ -332,7 +341,7 @@ function onResults(res, t) {
 function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
   // two-hand shape: draw pinch + control pinch
   const bothPinch = D.present && Sp.present && D.pinch && Sp.pinch;
-  if (bothPinch && !G.twoShape && (!d2.cur || d2.cur.pts.length < 6) && !overUI) {
+  if (bothPinch && S.tool2d !== 'select' && !G.twoShape && (!d2.cur || d2.cur.pts.length < 6) && !overUI) {
     if (d2.cur) d2.cancel();
     if (G.sizing) { S.size = G.size0; syncSize(); G.sizing = false; }
     G.twoShape = true; handDrawing2d = true;
@@ -356,10 +365,14 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
     G.panPrev = G.panPos.slice();
   } else if (G.panT) { G.panT = 0; G.panPrev = G.panPos = null; }
   // control-hand pinch alone → brush size
-  if (Sp.present && Sp.pinch && !D.pinch) {
+  if (Sp.present && Sp.pinch && !D.pinch && S.tool2d === 'select' && d2.sel != null && !G.selEdit) {
+    // control-hand pinch up/down scales the selected object
+    if (!G.scale2) { G.scale2 = true; G.sizeY0 = Sp.y; d2.startEdit({ idx: d2.sel, mode: 'scale' }, [0, 0]); }
+    d2.scaleEdit(1 + (G.sizeY0 - Sp.y) * 3);
+  } else if (Sp.present && Sp.pinch && !D.pinch) {
     if (!G.sizing) { G.sizing = true; G.sizeY0 = Sp.y; G.size0 = S.size; }
     S.size = Math.round(Math.max(1, Math.min(80, G.size0 + (G.sizeY0 - Sp.y) * 140))); syncSize();
-  } else G.sizing = false;
+  } else { G.sizing = false; if (G.scale2) { d2.endEdit(); G.scale2 = false; } }
 
   // palm eraser (draw hand open, not during clear combo)
   const palmOK = D.present && D.pose === 'OPEN' && !(Sp.present && Sp.pose === 'OPEN');
@@ -371,6 +384,15 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
     return;
   } else { G.palmT = 0; if (G.palm) { d2.end(); G.palm = false; } }
 
+  // select tool: pinch an object to move it, pinch a corner square to resize it
+  if (S.tool2d === 'select') {
+    if (drawOn && drawStart && !overUI && !G.selEdit) {
+      const hit = d2.hitTest(p);
+      if (hit) { d2.select(hit.idx); d2.startEdit(hit, p); G.selEdit = true; beep(900); } else d2.select(null);
+    } else if (drawOn && G.selEdit) d2.dragEdit(p);
+    else if (!drawOn && G.selEdit) { d2.endEdit(); G.selEdit = false; }
+    return;
+  }
   // freehand / single-hand shape
   if (drawOn && !handDrawing2d && drawStart && !overUI) {
     const ruler = Sp.present && Sp.pose === 'OPEN' && !SHAPES.includes(S.tool2d) && S.tool2d !== 'eraser';
@@ -488,7 +510,7 @@ function updateFeedback(f, t) {
 function actionLabel(h, dom) {
   if (!h.present) return '';
   if (dom) {
-    if (S.mode === '2d') { if (G.twoShape) return 'Two-hand shape'; if (G.palm) return 'Palm eraser'; if (handDrawing2d) return 'Drawing · ' + S.tool2d; }
+    if (S.mode === '2d') { if (G.selEdit) return 'Moving / resizing'; if (G.twoShape) return 'Two-hand shape'; if (G.palm) return 'Palm eraser'; if (handDrawing2d) return 'Drawing · ' + S.tool2d; }
     else { if (G.grabbing) return 'Holding object'; if (G.d3Draw) return 'Creating · ' + S.tool3d; if (G.orbit) return 'Orbit / zoom'; }
     if (G.dwellEl) return 'Air-click ' + Math.round(G.dwellP * 100) + '%';
     return 'Ready';

@@ -19,6 +19,8 @@ Click **▶ Start camera** and allow camera access.
 
 **3D:** tube strokes, ribbons, cube, sphere, cylinder, cone and torus. Select lets you move, rotate and scale objects by gesture or with the mouse gizmo. Delete, duplicate and recolour. Mirror-X symmetric sculpting. Materials: standard, glossy, metal, toon, wireframe and normals. View presets and auto-rotate. Export: **STL**, GLB, OBJ, and a PNG of the view.
 
+**Edit & snap (2D):** ✋ Select tool: pinch an object to move it, pinch a corner square to resize it, or pinch the control hand up/down to scale it. Copy and Delete buttons are included. 🧲 Snap locks shapes, straight lines and moved objects to the grid, to corners and ends of other objects, and to 15° angles.
+
 **Projects:** 💾 Save writes a `.aircanvas.json` that holds both the 2D and 3D work. 📂 Open reloads it so you can keep editing. Autosave to browser storage restores your last session.
 
 **Feedback:** status pills for camera, model (GPU/CPU), hand count and fps/latency. The live skeleton preview labels hands DRAW and CTRL. Per-hand cards show the pose, pinch strength, confidence and current action. Hold-progress rings, dwell rings, and hints cover no hand, too close, too far and low light.
@@ -42,6 +44,7 @@ The draw hand is your dominant hand, set in ⚙. Each hand is tracked by positio
 
 | Control hand | Action |
 |---|---|
+| ✊ fist + move | 2D: move the paper (pan) when zoomed in |
 | ✌️ | Next colour |
 | 🤟 three fingers | Next tool |
 | 🤏 + move up/down | 2D brush size · 3D depth plane, or scale the selected object |
@@ -55,6 +58,8 @@ The draw hand is your dominant hand, set in ⚙. Each hand is tracked by positio
 | 👍 + 👍 hold | Download (2D PNG · 3D STL) |
 | ✌️ + ✌️ hold | Save project file |
 | ✋ + ✋ hold 1.5 s | Clear (undo restores) |
+
+Zoom: − / % / + buttons under Undo/Redo, or the mouse wheel on the canvas (% resets to fit).
 
 Keyboard: Ctrl+Z / Ctrl+Y, Ctrl+S to save, `[` `]` for brush size, Delete removes the selected 3D object, Esc. The mouse and touch also work.
 
