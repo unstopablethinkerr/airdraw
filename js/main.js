@@ -341,11 +341,20 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
     if (bothPinch) { d2.shapeFromTwo(SHAPES.includes(S.tool2d) ? S.tool2d : 'rect', q, p, opts2d()); return; }
     d2.end(); G.twoShape = false; handDrawing2d = false; return;
   }
-  // control-hand fist ✊ = grab the paper and move it (pan), useful when zoomed in
-  if (Sp.present && Sp.pose === 'FIST' && !handDrawing2d) {
-    if (G.panPrev) d2.panBy((Sp.x - G.panPrev[0]) * innerWidth * 1.5, (Sp.y - G.panPrev[1]) * innerHeight * 1.5);
-    G.panPrev = [Sp.x, Sp.y];
-  } else G.panPrev = null;
+  // control-hand fist ✊ = grab the paper and move it (pan).
+  // Tracks the palm (knuckle) point, not the fingertip: when the hand opens the fingertips jump,
+  // but the palm barely moves. Stops on the very first frame the fist opens, so the paper stays put.
+  const fistNow = Sp.present && Sp.pose === 'FIST' && Sp.rawPose === 'FIST' && !handDrawing2d;
+  if (fistNow) {
+    const k = Sp.lm[9], px = 1 - k.x, py = k.y;
+    G.panPos = G.panPos ? [G.panPos[0] * 0.3 + px * 0.7, G.panPos[1] * 0.3 + py * 0.7] : [px, py];
+    if (!G.panT) G.panT = t;
+    if (G.panPrev && t - G.panT > 200) { // short hold before moving: a passing fist does nothing
+      const sc = 1.8 / ge.settings.reach, dx = (G.panPos[0] - G.panPrev[0]) * innerWidth * sc, dy = (G.panPos[1] - G.panPrev[1]) * innerHeight * sc;
+      d2.panBy(dx, dy);
+    }
+    G.panPrev = G.panPos.slice();
+  } else if (G.panT) { G.panT = 0; G.panPrev = G.panPos = null; }
   // control-hand pinch alone → brush size
   if (Sp.present && Sp.pinch && !D.pinch) {
     if (!G.sizing) { G.sizing = true; G.sizeY0 = Sp.y; G.size0 = S.size; }
