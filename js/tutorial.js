@@ -91,6 +91,7 @@ export class Tutorial {
           this.$('#tu-text').innerHTML = `This is your <b>draw hand</b>. Hold it up, palm facing the screen. Keep your other hand down.<br><span class="muted small">If the app sees it as the wrong hand, it fixes this automatically.</span>`;
         },
         check(f, t) {
+          f = f.raw || f;
           if (f.count !== 1) { this.st.wrong = 0; this._status(f.count === 0 ? 'Waiting for your hand…' : 'Only one hand please'); return 0; }
           const h = this.hand(f);
           if (h.side === domSide()) { this._status(`Seen as your ${this.sideWord(h.side)} hand ✓ — hold still`, true); return this.hold('ok', true, 1000, t); }
@@ -107,9 +108,22 @@ export class Tutorial {
         actionLabel: '↔ My hands are reversed',
         action: () => { A.swapHands(); A.toast('↔ Swapped left/right'); },
         check(f, t) {
+          f = f.raw || f;
           if (f.count < 2) { this._status(`Hands seen: ${f.count} / 2`); return 0; }
           this._status('Both hands tracked ✓ — DRAW hand is blue, CONTROL hand is orange', true);
           return this.hold('both', true, 1500, t);
+        },
+      },
+      {
+        icon: '🚪', title: 'Activate your hands',
+        text: 'Hands are <b>locked 🔒</b> until they pass through the <b>✋ zone</b> in the top bar. This stops accidental drawing when you rest, scratch or pick something up.<br>Move <b>each</b> hand\'s cursor into the dashed ✋ box at the top until it turns green. Later, go back into the box (or hold ✌️ with your draw hand) to <b>pause</b>.',
+        enter() { document.getElementById('gate').classList.add('tu-glow'); },
+        exit() { document.getElementById('gate').classList.remove('tu-glow'); },
+        check(f, t) {
+          if (!A.SET.gate) { this._status('Activation gate is off in ⚙ — skipping', true); return true; }
+          const e = f.engaged || {}, n = (e.dom ? 1 : 0) + (e.sup ? 1 : 0);
+          this._status(`Active hands: ${n} / 2 ${e.dom ? '· DRAW ✓' : ''} ${e.sup ? '· CTRL ✓' : ''}`, n > 0);
+          return n === 2 ? this.hold('eng', true, 500, t) : n * 0.45;
         },
       },
       {
@@ -157,7 +171,7 @@ export class Tutorial {
       },
       {
         icon: '👆', title: 'Click a button in the air',
-        text: 'Point at the <b>Undo</b> button in the toolbar on the right. Hold still until the ring fills, or pinch on it.<br>Undo and Redo are buttons only, so you can\'t undo by accident.',
+        text: 'Point at the <b>Undo</b> button in the toolbar on the right. The button under your cursor gets a <b>yellow outline</b>. Hold still, then pinch quickly to click it.<br>Undo and Redo are buttons only, so you can\'t undo by accident.',
         enter() { document.getElementById('btn-undo').classList.add('tu-glow'); },
         exit() { document.getElementById('btn-undo').classList.remove('tu-glow'); },
         on(type, el) { if (type === 'airclick' && el?.id === 'btn-undo') this._pass(); else if (type === 'airclick') this._status('That was a different button — aim for Undo'); },
@@ -207,7 +221,7 @@ export class Tutorial {
       },
       {
         icon: '🎉', title: 'You\'re ready!',
-        text: 'Quick recap:<br>☝️ point = cursor · 🤏 pinch = draw · ✋ palm = erase<br>✌️ control = colour · 🤟 control = tool · 🤏 control up/down = size<br>🤏+🤏 = shape (2D) or orbit (3D) · 👍+👍 hold = download<br>Undo and Redo: point at the buttons.<br><br>Press <b>Finish</b>, and your drawing comes back. Reopen this tutorial any time with 🎓.',
+        text: 'Quick recap:<br>☝️ point = cursor · 🤏 pinch = draw · ✋ palm = erase<br>✌️ control = colour · 🤟 control = tool · 🤏 control up/down = size<br>🤏+🤏 = shape (2D) or orbit (3D) · 👍+👍 hold = download<br>✌️ hold (draw hand) = pause · 🤟 hold (draw hand) = pointer mode · ✋ zone = start or pause<br>Twist the control hand while drawing a shape to rotate it.<br>Undo and Redo: pinch on the buttons.<br><br>Press <b>Finish</b>, and your drawing comes back. Reopen this tutorial any time with 🎓.',
       },
     ];
   }

@@ -8,15 +8,15 @@ import { Tutorial } from './tutorial.js';
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const PALETTE = ['#111111', '#ffffff', '#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#00c7be', '#1e66f5', '#5856d6', '#af52de', '#ff2d92', '#8e5a2b'];
-const TOOLS2D = ['pen', 'brush', 'marker', 'calligraphy', 'neon', 'rainbow', 'gradient', 'spray', 'eraser', ...SHAPES, 'select'];
+const TOOLS2D = ['pen', 'brush', 'marker', 'calligraphy', 'neon', 'rainbow', 'gradient', 'spray', 'eraser', ...SHAPES.filter(t => t !== 'triangle'), 'select'];
 const TOOLS3D = ['stroke', 'ribbon', ...PRIMS, 'select', 'erase'];
 
 // ---------------- state ----------------
 const S = {
-  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ff3d7f', size: 8, opacity: 100, smooth: 60, fill: false, fillMode: 'off', straighten: false, snap: false,
+  mode: '2d', tool2d: 'pen', tool3d: 'stroke', colorA: '#1e66f5', colorB: '#ffffff', size: 8, opacity: 100, smooth: 40, sides: 5, fill: false, fillMode: 'off', straighten: false, snap: false,
   symmetry: 'none', depthRange: 50,
 };
-const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swapLR: false, sound: true, oneHandDraws: false };
+const SET = { dominant: 'Right', trigger: 'pinch', reach: 75, pinch: 32, dwell: 800, quality: 'balanced', delegate: 'GPU', skeleton: true, swapLR: false, sound: true, oneHandDraws: false, gate: true, dwellClick: false };
 try { Object.assign(SET, JSON.parse(localStorage.getItem('aircanvas.settings') || '{}')); } catch {}
 const saveSettings = () => { try { localStorage.setItem('aircanvas.settings', JSON.stringify(SET)); } catch {} };
 
@@ -28,7 +28,7 @@ const overlay = $('#c-overlay'), ox = overlay.getContext('2d');
 const skel = $('#c-skel'), sx = skel.getContext('2d');
 const video = $('#video');
 let autosaveT = null, uiSaveT = null, handDrawing2d = false;
-let lastFrame = null, stageRect = $('#stage').getBoundingClientRect();
+let lastFrame = null, lastRaw = null, stageRect = $('#stage').getBoundingClientRect();
 
 const tracker = new HandTracker(video, {
   onStatus: (k, cls, text) => setPill(k === 'cam' ? '#st-cam' : '#st-model', cls, text),
@@ -48,7 +48,7 @@ function beep(f = 880, d = 0.05) {
 }
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-const opts2d = () => ({ color: S.colorA, color2: S.colorB, size: S.size, opacity: S.opacity / 100, sym: S.symmetry, fill: S.fillMode !== 'off', fillMode: S.fillMode });
+const opts2d = () => ({ sides: S.sides, color: S.colorA, color2: S.colorB, size: S.size, opacity: S.opacity / 100, sym: S.symmetry, fill: S.fillMode !== 'off', fillMode: S.fillMode });
 
 // ---------------- UI wiring ----------------
 const sw = $('#swatches');
@@ -84,6 +84,11 @@ function bindRange(id, key, fn) {
 bindRange('size', 'size', v => { S.size = v; d3.radius = 0.02 + v * 0.006; scheduleUISave(); });
 bindRange('opacity', 'opacity', v => { S.opacity = v; scheduleUISave(); });
 bindRange('smooth', 'smooth', v => { S.smooth = v; ge.setSmoothing(v / 100); scheduleUISave(); });
+bindRange('sides', 'sides', v => {
+  S.sides = v; scheduleUISave();
+  const st = d2.doc.strokes[d2.sel]; // a selected polygon/star follows the Sides setting
+  if (st && (st.tool === 'polygon' || st.tool === 'star') && st.sides !== v) { d2._push(); const c = JSON.parse(JSON.stringify(st)); c.sides = v; d2.doc.strokes[d2.sel] = c; d2.renderAll(); d2.renderLive(); d2.onChange(); }
+});
 bindRange('depthRange', 'depthRange', v => { S.depthRange = v; scheduleUISave(); });
 $$('[data-step]').forEach(b => b.onclick = () => { const el = $('#' + b.dataset.step); el.value = Math.max(+el.min, Math.min(+el.max, +el.value + +b.dataset.d)); el.dispatchEvent(new Event('input')); });
 $('#straight').onchange = (e) => { S.straighten = e.target.checked; scheduleUISave(); };
@@ -119,6 +124,12 @@ $('#zoom-in').onclick = () => S.mode === '3d' ? d3.zoom(0.8) : d2.setZoom(d2.zoo
 $('#zoom-out').onclick = () => S.mode === '3d' ? d3.zoom(1.25) : d2.setZoom(d2.zoom / 1.25);
 $('#zoom-fit').onclick = () => S.mode === '3d' ? d3.setView('front') : d2.resetView();
 $('#c-main').addEventListener('wheel', (e) => { e.preventDefault(); d2.setZoom(d2.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.offsetX, e.offsetY); }, { passive: false });
+function setPointer(on) {
+  G.pointer = !!on; $('#btn-pointer').classList.toggle('active', G.pointer);
+  if (G.pointer) endAllInteractions();
+  toast(G.pointer ? '🖱 Pointer mode: hands only click buttons, nothing is drawn' : '✏️ Drawing mode');
+}
+$('#btn-pointer').onclick = () => setPointer(!G.pointer);
 function setSnap(on) { S.snap = d2.snapOn = !!on; $('#btn-snap').classList.toggle('active', S.snap); scheduleUISave(); }
 $('#btn-snap').onclick = () => { setSnap(!S.snap); toast(S.snap ? '🧲 Snap on: grid, corners, 15° angles' : 'Snap off'); };
 $('#sel2-dup').onclick = () => { if (!d2.duplicateSelected()) toast('Select an object first (✋ Select tool)'); };
@@ -163,10 +174,11 @@ function bindSet(id, key, num) {
 }
 bindSet('set-dominant', 'dominant'); bindSet('set-trigger', 'trigger'); bindSet('set-reach', 'reach', true); bindSet('set-pinch', 'pinch', true);
 bindSet('set-dwell', 'dwell', true); bindSet('set-quality', 'quality'); bindSet('set-delegate', 'delegate');
-bindSet('set-skeleton', 'skeleton'); bindSet('set-swap', 'swapLR'); bindSet('set-onehand', 'oneHandDraws'); bindSet('set-sound', 'sound');
+bindSet('set-skeleton', 'skeleton'); bindSet('set-swap', 'swapLR'); bindSet('set-onehand', 'oneHandDraws'); bindSet('set-gate', 'gate'); bindSet('set-dwellclick', 'dwellClick'); bindSet('set-sound', 'sound');
 function applySettings(changed) {
   Object.assign(ge.settings, { dominant: SET.dominant, reach: SET.reach / 100, pinch: SET.pinch / 100, swap: SET.swapLR, trigger: SET.trigger, oneHandDraws: SET.oneHandDraws });
   if (['swapLR', 'dominant', 'oneHandDraws'].includes(changed)) ge.tracks = []; // re-learn hand roles
+  $('#gate').classList.toggle('hidden', !SET.gate);
   tracker.setQuality(SET.quality);
   if (changed === 'delegate' && tracker.landmarker) tracker.loadModel(SET.delegate).then(() => toast('Processor: ' + tracker.delegate)).catch(e => toast('Model error: ' + e.message));
   $('#hc-dom').title = `Draw hand (${SET.dominant})`; $('#hc-sup').title = `Control hand (${SET.dominant === 'Right' ? 'Left' : 'Right'})`;
@@ -259,7 +271,7 @@ function applyProject(p) {
   if (p.d2) d2.load(p.d2);
   if (p.d3) d3.load(p.d3);
   $('#layout').value = d2.doc.layout; $('#symmetry').value = S.symmetry; $('#material').value = d3.matMode; if (!S.fillMode) S.fillMode = S.fill ? 'gradient' : 'off'; $('#fillmode').value = S.fillMode;
-  for (const id of ['size', 'opacity', 'smooth', 'depthRange']) { $('#' + id).value = S[id]; $('#' + id + '-v').textContent = S[id]; fillOf(id); }
+  for (const id of ['size', 'opacity', 'smooth', 'depthRange', 'sides']) { if (S[id] === undefined) continue; $('#' + id).value = S[id]; $('#' + id + '-v').textContent = S[id]; fillOf(id); }
   $('#straight').checked = !!S.straighten; setSnap(S.snap);
   ge.setSmoothing(S.smooth / 100); syncSize();
   setColor(S.colorA); setTool2d(S.tool2d); setTool3d(S.tool3d); setMode(p.mode || S.mode);
@@ -275,6 +287,7 @@ d2.onChange = scheduleAutosave; d3.onChange = scheduleAutosave;
 
 // ---------------- gesture → action ----------------
 const G = { // interaction state
+  engaged: new Set(), gateSt: {}, gateProg: 0, hov: [], hoverEl: null, pointer: false, dh: null, pinchOnUI: false,
   twoShape: false, palm: false, palmT: 0, sizeY0: 0, size0: 0, sizing: false,
   d3Draw: null, grabbing: false, prevCursor: null, prevSup: null, orbit: null, depthBase: 0, depthRef: null, scale0: null, depthNow: 0,
   dwellEl: null, dwellT: 0, dwellP: 0, lastCards: 0,
@@ -300,40 +313,118 @@ function airClick(el) {
   beep(1000); el.classList.add('air-hover'); setTimeout(() => el.classList.remove('air-hover'), 250);
 }
 
+// ---------------- activation gate ----------------
+// Only hands that pass through the ✋ zone (top bar) are "active". Hands that enter the camera
+// later, come back after leaving, or belong to someone else are ignored until they pass it too.
+// Going into the zone again with an active hand (or holding ✌️ with the draw hand) pauses.
+function updateGate(raw, t) {
+  if (!SET.gate) return { dom: raw.dom.present, sup: raw.sup.present };
+  const live = new Set(ge.tracks.map(tr => tr.id));
+  for (const id of [...G.engaged]) if (!live.has(id)) G.engaged.delete(id);
+  for (const tr of ge.tracks) tr.keep = G.engaged.has(tr.id); // active hands survive short tracking drop-outs
+  const r = $('#gate').getBoundingClientRect(), pad = 26;
+  let prog = 0;
+  for (const h of [raw.dom, raw.sup]) {
+    if (!h.present || h.trackId == null) continue;
+    const id = h.trackId, x = h.x * innerWidth, y = h.y * innerHeight;
+    const inside = x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad;
+    const g = G.gateSt[id] || (G.gateSt[id] = { since: 0, mustLeave: false });
+    if (!inside) { g.since = 0; g.mustLeave = false; continue; }
+    if (g.mustLeave) continue;
+    if (!g.since) g.since = t;
+    const active = G.engaged.has(id), need = active ? 700 : 300;
+    prog = Math.max(prog, Math.min(1, (t - g.since) / need));
+    if (t - g.since >= need) {
+      g.since = 0; g.mustLeave = true;
+      if (active) { pauseHands(); for (const k in G.gateSt) G.gateSt[k].mustLeave = true; }
+      else { G.engaged.add(id); beep(1100, 0.08); toast(`✅ ${h === raw.dom ? 'Draw' : 'Control'} hand active`); }
+    }
+  }
+  G.gateProg = prog;
+  return { dom: raw.dom.present && G.engaged.has(raw.dom.trackId), sup: raw.sup.present && G.engaged.has(raw.sup.trackId) };
+}
+function pauseHands() { if (!G.engaged.size) return; G.engaged.clear(); endAllInteractions(); beep(400, 0.12); toast('⏸ Paused — move your hand into ✋ at the top to continue', 2200); }
+const ghost = (h) => ({ present: false, edges: {}, pose: 'NONE', rawPose: 'NONE', pinch: false, pinchStrength: 0, x: h.x, y: h.y, rx: h.rx, ry: h.ry, scale: h.scale, roll: h.roll, lm: null, side: h.side, score: 0, trackId: h.trackId });
+function renderGate(eng, raw) {
+  const el = $('#gate'), any = eng.dom || eng.sup;
+  el.classList.toggle('on', !!any); el.querySelector('.gate-fill').style.width = (G.gateProg * 100).toFixed(0) + '%';
+  const txt = !any ? (raw.count ? '✋ Move hand here to start' : '✋ Start zone')
+    : `DRAW ${eng.dom ? '✓' : '·'}  CTRL ${eng.sup ? '✓' : '·'}  ·  here = pause`;
+  if (el._t !== txt) { el._t = txt; $('#gate-t').textContent = txt; }
+}
+
+function setHover(el) {
+  if (G.hoverEl === el) return;
+  G.hoverEl?.classList.remove('air-target'); G.hoverEl = el; el?.classList.add('air-target');
+}
+
 function onResults(res, t) {
-  if (!res) { lastFrame = null; drawSkeleton(null); return; }
-  const f = ge.update(res, t, video.videoWidth / Math.max(1, video.videoHeight) || 4 / 3);
+  if (!res) { lastFrame = lastRaw = null; drawSkeleton(null); setHover(null); return; }
+  const raw = ge.update(res, t, video.videoWidth / Math.max(1, video.videoHeight) || 4 / 3);
+  lastRaw = raw;
+  const eng = updateGate(raw, t);
+  const D = eng.dom ? raw.dom : ghost(raw.dom), Sp = eng.sup ? raw.sup : ghost(raw.sup);
+  const f = { ...raw, dom: D, sup: Sp, raw, engaged: eng, holds: eng.dom || eng.sup ? raw.holds : {}, combo: eng.dom && eng.sup ? raw.combo : '' };
   lastFrame = f;
   drawSkeleton(res);
-  for (const ev of f.events) doEvent(ev.type);
+  renderGate(eng, raw);
+  // gestures only count from active hands
+  const need = { nextColor: 'sup', nextTool: 'sup', mode: 'sup', download: 'both', clear: 'both', save: 'both' };
+  for (const ev of raw.events) {
+    const n = need[ev.type];
+    if ((n === 'sup' && !eng.sup) || (n === 'both' && !(eng.dom && eng.sup))) continue;
+    doEvent(ev.type);
+  }
   const W = innerWidth, H = innerHeight;
-  const D = f.dom, Sp = f.sup;
   const dp = [D.x * W, D.y * H], sp = [Sp.x * W, Sp.y * H];
   const st = (p) => [p[0] - stageRect.left, p[1] - stageRect.top];
   const drawOn = D.present && (SET.trigger === 'pinch' ? D.pinch : D.pose === 'POINT');
   const drawStart = SET.trigger === 'pinch' ? D.edges.pinchStart : (D.edges.poseChanged !== undefined && D.pose === 'POINT');
   const modalOpen = !!document.querySelector('.modal:not(.hidden)');
   const uiEl = D.present ? uiAt(dp[0], dp[1]) : null;
+  const clickable = uiEl && !uiEl.matches(UI_SEL) ? uiEl : null;
 
-  // ---- air UI: pinch-tap or dwell on buttons ----
-  // air slider: pinch on the bar, then slide left/right while pinching
-  if (uiEl && D.edges.pinchStart && uiEl.matches('.aslider')) { G.slider = uiEl; uiEl.classList.add('drag'); }
+  // ---- draw-hand holds: ✌️ = pause, 🤟 = pointer mode on/off ----
+  const HOLD = { PEACE: [800, () => pauseHands()], THREE: [600, () => setPointer(!G.pointer)] };
+  if (D.present && HOLD[D.pose] && !(Sp.present && Sp.pose === D.pose) && !D.pinch) {
+    if (!G.dh || G.dh.pose !== D.pose) G.dh = { pose: D.pose, t0: t, fired: false, p: 0 };
+    G.dh.p = Math.min(1, (t - G.dh.t0) / HOLD[D.pose][0]);
+    if (G.dh.p >= 1 && !G.dh.fired) { G.dh.fired = true; HOLD[D.pose][1](); if (!G.engaged.size && SET.gate) return updateFeedback(f, t); }
+  } else G.dh = null;
+
+  // ---- air UI ----
+  // The click goes to the button the cursor was RESTING on just before the pinch began
+  // (closing the fingers moves the hand a little; that used to hit the button above/below).
+  if (D.present && !D.pinch) { G.hov.push({ t, el: clickable }); while (G.hov.length && t - G.hov[0].t > 450) G.hov.shift(); }
+  if (!D.present) G.hov.length = 0;
+  setHover(D.present && !D.pinch ? clickable : null);
+  let pinchedUI = null;
+  if (D.edges.pinchStart) {
+    let target = clickable;
+    for (let i = G.hov.length - 1; i >= 0; i--) if (t - G.hov[i].t >= 130) { target = G.hov[i].el; break; }
+    pinchedUI = target || (uiEl ? 'panel' : null);
+    G.pinchOnUI = !!pinchedUI;
+    if (target && target.matches('.aslider')) { G.slider = target; target.classList.add('drag'); }
+    else if (target) { airClick(target); G.dwellEl = null; }
+  }
+  if (!D.pinch) G.pinchOnUI = false;
   if (G.slider) {
     if (D.present && D.pinch) { setSlider(G.slider, dp[0]); updateFeedback(f, t); return; }
     G.slider.classList.remove('drag'); G.slider = null;
   }
-  if (uiEl && D.edges.pinchStart) { airClick(uiEl); G.dwellEl = null; }
-  const dwellPose = D.pose === 'POINT';
-  if (uiEl && dwellPose && !uiEl.matches(UI_SEL + ', .aslider')) {
-    if (G.dwellEl !== uiEl) { G.dwellEl = uiEl; G.dwellT = t; }
+  if (SET.dwellClick && clickable && D.pose === 'POINT' && !clickable.matches('.aslider')) {
+    if (G.dwellEl !== clickable) { G.dwellEl = clickable; G.dwellT = t; }
     G.dwellP = Math.min(1, (t - G.dwellT) / SET.dwell);
-    if (G.dwellP >= 1) { airClick(uiEl); G.dwellT = t + 600; }
+    if (G.dwellP >= 1) { airClick(clickable); G.dwellT = t + 600; }
   } else { G.dwellEl = null; G.dwellP = 0; }
 
+  const overUI = !!uiEl || G.pinchOnUI;
   if (modalOpen) { endAllInteractions(); return updateFeedback(f, t); }
   if (tutor?.active && S.mode !== '2d') setMode('2d');
-  if (S.mode === '2d') handle2d(f, t, D, Sp, st(dp), st(sp), drawOn, drawStart, !!uiEl);
-  else handle3d(f, t, D, Sp, dp, sp, drawOn, drawStart, !!uiEl);
+  if (!G.pointer) {
+    if (S.mode === '2d') handle2d(f, t, D, Sp, st(dp), st(sp), drawOn, drawStart, overUI);
+    else handle3d(f, t, D, Sp, dp, sp, drawOn, drawStart, overUI);
+  }
   updateFeedback(f, t);
   tutor?.tick(f, t);
 }
@@ -344,10 +435,10 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
   if (bothPinch && S.tool2d !== 'select' && !G.twoShape && (!d2.cur || d2.cur.pts.length < 6) && !overUI) {
     if (d2.cur) d2.cancel();
     if (G.sizing) { S.size = G.size0; syncSize(); G.sizing = false; }
-    G.twoShape = true; handDrawing2d = true;
+    G.twoShape = true; handDrawing2d = true; G.rotRef = null;
   }
   if (G.twoShape) {
-    if (bothPinch) { d2.shapeFromTwo(SHAPES.includes(S.tool2d) ? S.tool2d : 'rect', q, p, opts2d()); return; }
+    if (bothPinch) { d2.shapeFromTwo(SHAPES.includes(S.tool2d) ? S.tool2d : 'rect', q, p, opts2d()); twistShape(Sp); return; }
     d2.end(); G.twoShape = false; handDrawing2d = false; return;
   }
   // control-hand fist ✊ = grab the paper and move it (pan).
@@ -389,7 +480,13 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
     if (drawOn && drawStart && !overUI && !G.selEdit) {
       const hit = d2.hitTest(p);
       if (hit) { d2.select(hit.idx); d2.startEdit(hit, p); G.selEdit = true; beep(900); } else d2.select(null);
-    } else if (drawOn && G.selEdit) d2.dragEdit(p);
+    } else if (drawOn && G.selEdit) {
+      d2.dragEdit(p);
+      if (d2.ed?.mode === 'move' && Sp.present && Sp.pinch) { // control-hand pinch + twist rotates the held object
+        if (G.rotRef == null) { G.rotRef = Sp.roll; G.rotBase = d2.ed.rot0; }
+        d2.setRot(G.rotBase - angDiff(Sp.roll, G.rotRef));
+      } else G.rotRef = null;
+    }
     else if (!drawOn && G.selEdit) { d2.endEdit(); G.selEdit = false; }
     return;
   }
@@ -397,12 +494,12 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
   if (drawOn && !handDrawing2d && drawStart && !overUI) {
     const ruler = Sp.present && Sp.pose === 'OPEN' && !SHAPES.includes(S.tool2d) && S.tool2d !== 'eraser';
     const p0 = [D.rx * innerWidth - stageRect.left, D.ry * innerHeight - stageRect.top]; // true hand position, no smoothing lag
-    d2.begin(ruler ? 'line' : S.tool2d, p0, opts2d()); handDrawing2d = true; G.pen = p0.slice();
+    d2.begin(ruler ? 'line' : S.tool2d, p0, opts2d()); handDrawing2d = true; G.pen = p0.slice(); G.rotRef = null;
   } else if (drawOn && handDrawing2d) {
     G.lastRaw = [D.rx * innerWidth - stageRect.left, D.ry * innerHeight - stageRect.top];
     // "lazy brush" stabilizer: the pen trails the cursor on a short string, so hand tremor
     // never reaches the paper and curves come out smooth. Shapes follow the cursor directly.
-    if (d2.cur && SHAPES.includes(d2.cur.tool)) d2.add(p);
+    if (d2.cur && SHAPES.includes(d2.cur.tool)) { d2.add(p); twistShape(Sp); }
     else {
       const R = 2 + S.smooth / 100 * 16, dx = p[0] - G.pen[0], dy = p[1] - G.pen[1], dist = Math.hypot(dx, dy);
       if (dist > R) { const k = (dist - R) / dist; G.pen[0] += dx * k; G.pen[1] += dy * k; d2.add(G.pen.slice()); }
@@ -413,6 +510,15 @@ function handle2d(f, t, D, Sp, p, q, drawOn, drawStart, overUI) {
     if (G.lastRaw && d2.cur && !SHAPES.includes(d2.cur.tool)) d2.add(G.lastRaw);
     d2.end(0, { finish: true, straighten: S.straighten }); handDrawing2d = false; G.lastRaw = null;
   }
+}
+// twist the control hand while drawing a shape → the shape rotates (15° steps with Snap)
+function twistShape(Sp) {
+  const c = d2.cur; if (!c || !Sp.present || c.tool === 'line' || c.tool === 'arrow') return;
+  if (G.rotRef == null) { G.rotRef = Sp.roll; return; }
+  let a = -angDiff(Sp.roll, G.rotRef);
+  if (Math.abs(a) < 0.1 && !c.rot) return;
+  if (S.snap) a = Math.round(a / (Math.PI / 12)) * (Math.PI / 12);
+  c.rot = a; d2.renderLive();
 }
 function palmCenter(D) {
   // eraser stays exactly where the pointing cursor was (same smoothed point), no jump to the palm centre
@@ -497,12 +603,13 @@ function updateFeedback(f, t) {
   else if (f.dom.present && f.dom.scale > 0.5) hint = '↔ Hand too close — move back a little';
   else if (f.dom.present && f.dom.scale < 0.08) hint = '↔ Hand far away — move closer for better tracking';
   else if (!f.dom.present && f.sup.present) hint = '✋ Only the control hand is visible — show your draw hand to draw';
+  else if (SET.gate && f.raw && f.raw.count && !f.engaged.dom && !f.engaged.sup) hint = '🔒 Hands inactive — move your hand cursor into the ✋ box at the top to start';
   else if (lowLight) hint = '💡 Low light — face a light source for better tracking';
   else if (f.combo && Object.keys(f.holds).length) hint = 'Hold… ' + f.combo;
   const h = $('#hint'); h.textContent = hint; h.classList.toggle('hidden', !hint);
   if (t - G.lastCards > 90) { // throttle DOM updates
     G.lastCards = t;
-    card('#hc-dom', f.dom, actionLabel(f.dom, true)); card('#hc-sup', f.sup, actionLabel(f.sup, false));
+    card('#hc-dom', f.raw.dom, f.engaged.dom, actionLabel(f.dom, true)); card('#hc-sup', f.raw.sup, f.engaged.sup, actionLabel(f.sup, false));
     $('#hc-combo .hp').textContent = f.combo || '—'; $('#hc-combo').classList.toggle('hidden', !f.combo);
     setPill('#st-perf', '', `${tracker.fps.toFixed(0)} fps`, `${tracker.fps.toFixed(0)} fps · ${tracker.inferMs.toFixed(0)} ms per frame · ${tracker.delegate}`);
   }
@@ -521,9 +628,9 @@ function actionLabel(h, dom) {
   const hk = Object.keys(ge.holds)[0]; if (hk) return 'Hold for ' + hk;
   return 'Ready';
 }
-function card(sel, h, action) {
-  const el = $(sel); el.classList.toggle('on', h.present); el.classList.toggle('off', !h.present);
-  el.querySelector('.hp').textContent = h.present ? POSE_ICON[h.pose] || h.pose : 'not seen';
+function card(sel, h, active, action) {
+  const el = $(sel); el.classList.toggle('on', h.present && active); el.classList.toggle('off', !h.present); el.classList.toggle('locked', h.present && !active);
+  el.querySelector('.hp').textContent = h.present ? (active ? '' : '🔒 ') + (POSE_ICON[h.pose] || h.pose) : 'not seen';
   el.querySelector('.pm').style.width = h.present ? (h.pinchStrength * 100).toFixed(0) + '%' : '0';
   el.querySelector('.hs').textContent = h.present ? `${h.side} · conf ${(h.score * 100).toFixed(0)}% · ${action}` : '';
 }
@@ -538,7 +645,7 @@ function drawSkeleton(res) {
   const vw = video.videoWidth || 640, vh = video.videoHeight || 480, s = Math.max(w / vw, hh / vh), offx = (w - vw * s) / 2, offy = (hh - vh * s) / 2;
   const P = (l) => [w - (l.x * vw * s + offx), l.y * vh * s + offy];
   res.landmarks.forEach((lm, i) => {
-    const isDom = lastFrame && lastFrame.dom.lm === lm;
+    const isDom = lastRaw && lastRaw.dom.lm === lm;
     sx.strokeStyle = isDom ? '#4f8cff' : '#ffb84f'; sx.lineWidth = 2; sx.beginPath();
     for (const [a, b] of HAND_CONNECTIONS) { const pa = P(lm[a]), pb = P(lm[b]); sx.moveTo(pa[0], pa[1]); sx.lineTo(pb[0], pb[1]); }
     sx.stroke(); sx.fillStyle = '#fff';
@@ -555,6 +662,14 @@ function drawOverlay() {
   ox.setTransform(d, 0, 0, d, 0, 0); ox.clearRect(0, 0, innerWidth, innerHeight);
   const f = lastFrame; if (!f || !tracker.running) return;
   const W = innerWidth, H = innerHeight;
+  // inactive (locked) hands: grey dashed ring
+  for (const [h, on] of [[f.raw.dom, f.engaged.dom], [f.raw.sup, f.engaged.sup]]) {
+    if (!h.present || on) continue;
+    const x = h.x * W, y = h.y * H;
+    ox.setLineDash([4, 4]); ox.strokeStyle = '#9aa0b0'; ox.lineWidth = 2; ox.beginPath(); ox.arc(x, y, 12, 0, 7); ox.stroke(); ox.setLineDash([]);
+    ox.font = '13px system-ui'; ox.fillStyle = '#c8ccd8'; ox.fillText('🔒', x + 14, y + 5);
+    if (G.gateProg > 0) { ox.strokeStyle = '#2ecc71'; ox.lineWidth = 4; ox.beginPath(); ox.arc(x, y, 20, -Math.PI / 2, -Math.PI / 2 + G.gateProg * Math.PI * 2); ox.stroke(); }
+  }
   for (const h of [f.dom, f.sup]) {
     if (!h.present) continue;
     const x = h.x * W, y = h.y * H, isDom = h === f.dom;
@@ -564,6 +679,9 @@ function drawOverlay() {
       if (G.palm) { const pc = palmCenter(h); ox.beginPath(); ox.arc(pc[0] + stageRect.left, pc[1] + stageRect.top, Math.max(14, S.size * 2.5) * 1.1 * d2.view.s, 0, 7); ox.strokeStyle = '#ff7b7b'; ox.stroke(); continue; }
       ox.beginPath(); ox.arc(x, y, r + 3, 0, 7); ox.fill(); ox.stroke();
       ox.beginPath(); ox.arc(x, y, 2, 0, 7); ox.fillStyle = '#000'; ox.fill();
+      if (G.pointer) { ox.font = '15px system-ui'; ox.fillStyle = '#fff'; ox.fillText('🖱', x + 12, y + 18); }
+      if (G.dh && G.dh.p > 0.15 && !G.dh.fired) { ox.beginPath(); ox.strokeStyle = G.dh.pose === 'PEACE' ? '#f5b041' : '#7fd1ff'; ox.lineWidth = 4; ox.arc(x, y, r + 14, -Math.PI / 2, -Math.PI / 2 + G.dh.p * Math.PI * 2); ox.stroke(); ox.font = '12px system-ui'; ox.fillStyle = '#fff'; ox.fillText(G.dh.pose === 'PEACE' ? 'pause' : 'pointer', x + r + 18, y - 8); }
+      if (G.gateProg > 0) { ox.beginPath(); ox.strokeStyle = '#2ecc71'; ox.lineWidth = 4; ox.arc(x, y, r + 14, -Math.PI / 2, -Math.PI / 2 + G.gateProg * Math.PI * 2); ox.stroke(); }
       if (G.dwellEl && G.dwellP > 0) { ox.beginPath(); ox.strokeStyle = '#ffd76a'; ox.lineWidth = 4; ox.arc(x, y, r + 12, -Math.PI / 2, -Math.PI / 2 + G.dwellP * Math.PI * 2); ox.stroke(); }
     } else {
       ox.fillStyle = 'rgba(255,184,79,.25)'; ox.strokeStyle = '#ffb84f'; ox.lineWidth = 2;
@@ -613,6 +731,13 @@ window.addEventListener('resize', () => { clearTimeout(onResize.t); onResize.t =
   try { const a = localStorage.getItem('aircanvas.autosave'); if (a) { applyProject(JSON.parse(a)); restored = true; } } catch (e) { console.warn('autosave restore failed', e); }
   if (!restored) { fitPanels(); d2.resize(); setColor(S.colorA); setTool3d('stroke'); setMode('2d'); }
   d3.resize();
+  try {
+    if (!localStorage.getItem('aircanvas.defaults.v6')) {
+      localStorage.setItem('aircanvas.defaults.v6', '1');
+      setColor('#ffffff', 'B'); S.smooth = 40; $('#smooth').value = 40; $('#smooth').dispatchEvent(new Event('input'));
+      if (!S.sides) S.sides = 5;
+    }
+  } catch {}
   if (restored) toast('Restored your last session (📂 New to start fresh)', 2500);
   if (!window.isSecureContext) toast('⚠ Camera needs https:// or http://localhost', 5000);
   setPill('#st-model', '', 'Model (loads with camera)');

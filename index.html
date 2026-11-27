@@ -31,6 +31,7 @@
       <span class="pill" id="st-hands" title="Hands detected"><i></i>✋ 0</span>
       <span class="pill mono" id="st-perf">–</span>
     </div>
+    <div id="gate" class="gate" title="Activation zone: move each hand's cursor here to make it active. Come back here to pause."><div class="gate-fill"></div><span id="gate-t">✋ Start zone</span></div>
     <div class="top-actions">
       <button id="btn-camera" class="btn primary" data-air>▶ Camera</button>
       <button id="btn-tutorial" class="btn icon" data-air title="Tutorial">🎓</button>
@@ -66,6 +67,7 @@
       <button class="tool" id="btn-undo" data-air title="Undo (Ctrl+Z)">↶<span>Undo</span></button>
       <button class="tool" id="btn-redo" data-air title="Redo (Ctrl+Y)">↷<span>Redo</span></button>
       <button class="tool" id="btn-clear" data-air title="Clear">🗑️<span>Clear</span></button>
+      <button class="tool" id="btn-pointer" data-air title="Pointer mode: hands only click buttons, never draw (draw hand 🤟 hold also toggles)">🖱️<span>Pointer</span></button>
       <div class="zoomrow" id="zoombar">
         <button class="sb" id="zoom-out" data-air title="Zoom out">−</button>
         <button class="sb zv" id="zoom-fit" data-air title="Fit to screen (100%)">100%</button>
@@ -87,9 +89,9 @@
       <button class="tool" data-tool="line" data-air title="Line">／<span>Line</span></button>
       <button class="tool" data-tool="rect" data-air title="Rectangle">▭<span>Rect</span></button>
       <button class="tool" data-tool="ellipse" data-air title="Ellipse">◯<span>Ellipse</span></button>
-      <button class="tool" data-tool="triangle" data-air title="Triangle">△<span>Tri</span></button>
+      <button class="tool" data-tool="polygon" data-air title="Polygon (3–20 sides, set Sides in Brush)">⬠<span>Polygon</span></button>
       <button class="tool" data-tool="arrow" data-air title="Arrow">➜<span>Arrow</span></button>
-      <button class="tool" data-tool="star" data-air title="Star">☆<span>Star</span></button>
+      <button class="tool" data-tool="star" data-air title="Star (points = Sides)">☆<span>Star</span></button>
       <div class="glabel">Edit</div>
       <button class="tool" data-tool="select" data-air title="Select: pinch an object to move it, pinch a corner square to resize">✋<span>Select</span></button>
       <button class="tool" id="btn-snap" data-air title="Snap to grid, object corners and 15° angles">🧲<span>Snap</span></button>
@@ -146,7 +148,7 @@
       <div id="swatches" class="swatches"></div>
       <div class="row">
         <label>A <input type="color" id="colorA" value="#1e66f5"></label>
-        <label>B <input type="color" id="colorB" value="#ff3d7f"></label>
+        <label>B <input type="color" id="colorB" value="#ffffff"></label>
         <button class="btn sm" id="btn-swap" data-air title="Swap A/B">⇄ Swap</button>
       </div>
     </section>
@@ -154,7 +156,8 @@
       <h4>Brush</h4>
       <div class="stp"><span>Size</span><button class="sb" data-step="size" data-d="-2" data-air>−</button><div class="aslider" data-for="size"><div class="af"></div><b id="size-v">8</b></div><button class="sb" data-step="size" data-d="2" data-air>+</button><input type="range" id="size" min="1" max="80" value="8" hidden></div>
       <div class="stp only2d"><span>Opacity</span><button class="sb" data-step="opacity" data-d="-10" data-air>−</button><div class="aslider" data-for="opacity"><div class="af"></div><b id="opacity-v">100</b></div><button class="sb" data-step="opacity" data-d="10" data-air>+</button><input type="range" id="opacity" min="5" max="100" value="100" hidden></div>
-      <div class="stp"><span>Smoothing</span><button class="sb" data-step="smooth" data-d="-10" data-air>−</button><div class="aslider" data-for="smooth"><div class="af"></div><b id="smooth-v">60</b></div><button class="sb" data-step="smooth" data-d="10" data-air>+</button><input type="range" id="smooth" min="0" max="100" value="60" hidden></div>
+      <div class="stp"><span>Smoothing</span><button class="sb" data-step="smooth" data-d="-10" data-air>−</button><div class="aslider" data-for="smooth"><div class="af"></div><b id="smooth-v">40</b></div><button class="sb" data-step="smooth" data-d="10" data-air>+</button><input type="range" id="smooth" min="0" max="100" value="40" hidden></div>
+      <div class="stp only2d"><span>Sides</span><button class="sb" data-step="sides" data-d="-1" data-air>−</button><div class="aslider" data-for="sides"><div class="af"></div><b id="sides-v">5</b></div><button class="sb" data-step="sides" data-d="1" data-air>+</button><input type="range" id="sides" min="3" max="20" value="5" hidden></div>
       <div class="duo only2d"><label class="mini fsel" title="Shape fill: Solid uses colour B with an A outline; Gradient blends A → B"><select id="fillmode">
           <option value="off">Fill: Off</option>
           <option value="solid">Fill: Solid (B)</option>
@@ -243,16 +246,19 @@
     <div class="modal-body">
       <button class="close" data-close data-air>✕</button>
       <h2>Gesture guide</h2>
-      <p class="muted">The <b>draw hand</b> is your dominant hand (set in ⚙). Each hand keeps its role while both stay in view. The control hand alone never draws (change in ⚙).</p>
+      <p class="muted"><b>Start:</b> move each hand's cursor into the <b>✋ zone</b> in the top bar. Only those hands can draw. Go back into the zone (or hold ✌️ with the draw hand) to pause. The <b>draw hand</b> is your dominant hand (set in ⚙). Each hand keeps its role while both stay in view. The control hand alone never draws (change in ⚙).</p>
       <div class="gcols">
         <div>
           <h3>Draw hand</h3>
           <table>
-            <tr><td>☝️ Point</td><td>Move cursor. Hold over any button ≈0.8 s to click it.</td></tr>
+            <tr><td>☝️ Point</td><td>Move cursor. The button under it gets a yellow outline; pinch to click it.</td></tr>
             <tr><td>🤏 Pinch</td><td>Draw / place / grab (thumb + index).</td></tr>
             <tr><td>✋ Open palm</td><td>2D: palm eraser. 3D: release.</td></tr>
             <tr><td>🤏 with ✋ Select tool</td><td>2D: pinch an object to move it, pinch a corner square to resize</td></tr>
-            <tr><td>✊ Fist</td><td>Pen up / pause.</td></tr>
+            <tr><td>✊ Fist</td><td>Pen up.</td></tr>
+            <tr><td>✌️ Two fingers (hold)</td><td>Pause: hands become inactive</td></tr>
+            <tr><td>🤟 Three fingers (hold)</td><td>Pointer mode on/off (click buttons without drawing)</td></tr>
+            <tr><td>🤏 drawing a shape + twist control hand</td><td>Rotate the shape</td></tr>
           </table>
         </div>
         <div>
@@ -313,6 +319,8 @@
         <select id="set-delegate"><option value="GPU">GPU (recommended)</option><option value="CPU">CPU</option></select>
       </label>
       <label class="check"><input type="checkbox" id="set-skeleton" checked> Show hand skeleton in preview</label>
+      <label class="check"><input type="checkbox" id="set-gate" checked> Activation gate: hands must enter the ✋ zone (top bar) before they can draw</label>
+      <label class="check"><input type="checkbox" id="set-dwellclick"> Click buttons by hovering (dwell) — off = pinch to click</label>
       <label class="check"><input type="checkbox" id="set-onehand"> One visible hand always draws (any hand)</label>
       <label class="check"><input type="checkbox" id="set-swap"> Swap left/right (if DRAW/CTRL labels look reversed)</label>
       <label class="check"><input type="checkbox" id="set-sound" checked> Click sounds</label>

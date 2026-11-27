@@ -19,7 +19,9 @@ Click **▶ Start camera** and allow camera access.
 
 **3D:** tube strokes, ribbons, cube, sphere, cylinder, cone and torus. Select lets you move, rotate and scale objects by gesture or with the mouse gizmo. Delete, duplicate and recolour. Mirror-X symmetric sculpting. Materials: standard, glossy, metal, toon, wireframe and normals. View presets and auto-rotate. Export: **STL**, GLB, OBJ, and a PNG of the view.
 
-**Edit & snap (2D):** ✋ Select tool: pinch an object to move it, pinch a corner square to resize it, or pinch the control hand up/down to scale it. Copy and Delete buttons are included. 🧲 Snap locks shapes, straight lines and moved objects to the grid, to corners and ends of other objects, and to 15° angles.
+**Shapes:** line, rect, ellipse, **polygon (3–20 sides)**, arrow, and a star whose point count is set by *Sides*. Twist the control hand while drawing a shape to rotate it.
+
+**Edit & snap (2D):** Selected objects show an orange rotate handle above the box: pinch and drag it to rotate (15° steps with Snap). Control-hand pinch + twist rotates an object while you hold it. ✋ Select tool: pinch an object to move it, pinch a corner square to resize it, or pinch the control hand up/down to scale it. Copy and Delete buttons are included. 🧲 Snap locks shapes, straight lines and moved objects to the grid, to corners and ends of other objects, and to 15° angles.
 
 **Projects:** 💾 Save writes a `.aircanvas.json` that holds both the 2D and 3D work. 📂 Open reloads it so you can keep editing. Autosave to browser storage restores your last session.
 
@@ -28,6 +30,12 @@ Click **▶ Start camera** and allow camera access.
 ## Tutorial
 
 On first launch an interactive tutorial opens. Reopen it any time with 🎓 Tutorial. Each step watches your hands and moves on only when you've done the gesture: draw hand, both hands, pointing at targets, pinch drawing, pen up/down, air-click, colour, size, tool, palm eraser and two-hand shape. If your camera reports left and right reversed, it fixes that automatically. Your drawing is saved before the tutorial and restored after.
+
+## Activation gate (start / pause)
+
+Hands are locked 🔒 until their cursor passes through the dashed **✋ zone** in the top bar. A locked hand can't draw, erase, click or change anything. That stops accidental actions when you rest, scratch, pick up your phone, or someone else walks into view. A hand stays active while it is tracked. Move an active hand back into the zone, or hold ✌️ with the draw hand, to **pause**. You can turn this off in ⚙.
+
+Clicking buttons needs a pinch by default. The button under the cursor gets a yellow outline, and the click goes to the button you were resting on just before you pinched. Hover-to-click (dwell) can be switched on in ⚙. **🖱 Pointer mode** (toolbar button, or hold 🤟 with the draw hand) lets you browse buttons without ever drawing.
 
 ## Gestures
 
@@ -41,6 +49,8 @@ The draw hand is your dominant hand, set in ⚙. Each hand is tracked by positio
 | 🤏 Pinch | Draw, place or grab. Pinching over a button clicks it |
 | ✋ Open palm | 2D palm eraser |
 | ✊ Fist | Pen up |
+| ✌️ hold | Pause (hands become inactive) |
+| 🤟 hold | Pointer mode on/off |
 
 | Control hand | Action |
 |---|---|

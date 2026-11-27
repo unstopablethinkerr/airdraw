@@ -1,6 +1,6 @@
 // 2D vector drawing engine: tools, shapes, symmetry, layouts, undo/redo, PNG/JPG/SVG export.
 const DPR = () => Math.min(window.devicePixelRatio || 1, 2);
-export const SHAPES = ['line', 'rect', 'ellipse', 'triangle', 'arrow', 'star'];
+export const SHAPES = ['line', 'rect', 'ellipse', 'triangle', 'polygon', 'arrow', 'star'];
 
 function rng(seed) { let s = seed >>> 0 || 1; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 function lerpColor(a, b, t) {
@@ -21,16 +21,31 @@ function symTransforms(sym, w, h) {
   for (let k = 1; k < n; k++) T.push(rot((2 * Math.PI * k) / n));
   return T;
 }
-function shapePoints(tool, a, b) {
+function shapePoints(tool, a, b, sides) {
   const [x1, y1] = a, [x2, y2] = b;
   if (tool === 'triangle') return [[(x1 + x2) / 2, y1], [x2, y2], [x1, y2]];
-  if (tool === 'star') {
-    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, R = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2, r = R * 0.45, out = [];
-    for (let i = 0; i < 10; i++) { const ang = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R; out.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr]); }
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  if (tool === 'polygon') { // regular polygon inside the dragged box, 3–20 sides
+    const n = Math.max(3, Math.min(20, sides || 5)), rx = Math.abs(x2 - x1) / 2, ry = Math.abs(y2 - y1) / 2, out = [];
+    for (let i = 0; i < n; i++) { const ang = -Math.PI / 2 + i * 2 * Math.PI / n; out.push([cx + Math.cos(ang) * rx, cy + Math.sin(ang) * ry]); }
+    return out;
+  }
+  if (tool === 'star') { // star with N points (uses the same Sides setting)
+    const n = Math.max(3, Math.min(20, sides || 5)), R = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)) / 2, r = R * (n <= 5 ? 0.45 : 0.6), out = [];
+    for (let i = 0; i < n * 2; i++) { const ang = -Math.PI / 2 + i * Math.PI / n, rr = i % 2 ? r : R; out.push([cx + Math.cos(ang) * rr, cy + Math.sin(ang) * rr]); }
     return out;
   }
   return null;
 }
+// rotation is stored per object (s.rot, radians) around the centre of its points
+export function centerOf(s) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const q of s.pts) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+  return [(x0 + x1) / 2, (y0 + y1) / 2];
+}
+function rotAround(x, y, c, a) { const co = Math.cos(a), si = Math.sin(a), dx = x - c[0], dy = y - c[1]; return [c[0] + dx * co - dy * si, c[1] + dx * si + dy * co]; }
+function localPt(s, x, y) { return s.rot ? rotAround(x, y, centerOf(s), -s.rot) : [x, y]; }
+function worldPt(s, x, y) { return s.rot ? rotAround(x, y, centerOf(s), s.rot) : [x, y]; }
 
 export class Draw2D {
   constructor(bg, main, live) {
@@ -100,7 +115,7 @@ export class Draw2D {
   begin(tool, p, o) {
     let [x, y] = this.toDoc(p[0], p[1]);
     if (this.snapOn && SHAPES.includes(tool)) [x, y] = this.snapPt(x, y);
-    this.cur = { tool, color: o.color, color2: o.color2, size: o.size, opacity: o.opacity, sym: o.sym, fill: !!o.fill, fillMode: o.fillMode || (o.fill ? 'gradient' : 'off'), seed: (Math.random() * 1e9) | 0, pts: [[x, y, 1]], t: performance.now() };
+    this.cur = { tool, color: o.color, color2: o.color2, size: o.size, opacity: o.opacity, sym: o.sym, fill: !!o.fill, fillMode: o.fillMode || (o.fill ? 'gradient' : 'off'), sides: o.sides || 5, rot: 0, seed: (Math.random() * 1e9) | 0, pts: [[x, y, 1]], t: performance.now() };
     if (SHAPES.includes(tool)) this.cur.pts.push([x, y, 1]);
     this.renderLive();
   }
@@ -177,13 +192,18 @@ export class Draw2D {
     const ctx = this.lx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, this.live.width, this.live.height);
     if (this.cur && this.cur.tool !== 'eraser') { this._apply(ctx); this._renderStroke(ctx, this.cur); }
     const st = this.doc.strokes[this.sel];
-    if (st) { // selection: the object being edited + dashed box with corner handles
+    if (st) { // selection: the object being edited + dashed box, corner handles and a rotate handle
       this._apply(ctx);
       if (this.editing === this.sel) this._renderStroke(ctx, st);
-      const [x0, y0, x1, y1] = bboxOf(st), k = 1 / this.view.s, h = 7 * k;
-      ctx.save(); ctx.setLineDash([6 * k, 4 * k]); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5 * k;
+      const [x0, y0, x1, y1] = bboxOf(st), k = 1 / this.view.s, h = 7 * k, c = centerOf(st);
+      ctx.save();
+      if (st.rot) { ctx.translate(c[0], c[1]); ctx.rotate(st.rot); ctx.translate(-c[0], -c[1]); }
+      ctx.setLineDash([6 * k, 4 * k]); ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 1.5 * k;
       ctx.strokeRect(x0, y0, x1 - x0, y1 - y0); ctx.setLineDash([]); ctx.fillStyle = '#fff';
       for (const [cx, cy] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) { ctx.fillRect(cx - h, cy - h, 2 * h, 2 * h); ctx.strokeRect(cx - h, cy - h, 2 * h, 2 * h); }
+      const rx = (x0 + x1) / 2, ry = y0 - 30 * k; // rotate handle
+      ctx.beginPath(); ctx.moveTo(rx, y0); ctx.lineTo(rx, ry); ctx.stroke();
+      ctx.beginPath(); ctx.arc(rx, ry, 8 * k, 0, 7); ctx.fillStyle = '#ffb000'; ctx.fill();
       ctx.restore();
     }
   }
@@ -195,7 +215,7 @@ export class Draw2D {
     const K = [];
     for (const s of this.doc.strokes) {
       if (s.tool === 'eraser' || s.tool === 'spray') continue;
-      if (SHAPES.includes(s.tool)) { const [x0, y0, x1, y1] = bboxOf(s, 0); K.push([x0, y0], [x1, y0], [x1, y1], [x0, y1], [(x0 + x1) / 2, (y0 + y1) / 2]); if (s.tool === 'line' || s.tool === 'arrow') K.push(s.pts[0], s.pts[1]); }
+      if (SHAPES.includes(s.tool)) { const [x0, y0, x1, y1] = bboxOf(s, 0); K.push(...[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [(x0 + x1) / 2, (y0 + y1) / 2]].map(q => worldPt(s, q[0], q[1]))); if (s.tool === 'line' || s.tool === 'arrow') K.push(...s.pts.map(q => worldPt(s, q[0], q[1]))); }
       else if (s.poly) K.push(...s.pts);
       else K.push(s.pts[0], s.pts[s.pts.length - 1]);
     }
@@ -211,16 +231,17 @@ export class Draw2D {
   // ---------------- select / move / resize ----------------
   // returns {idx, mode:'move'|'resize', corner} for a stage point, or null
   hitTest(p) {
-    const [x, y] = this.toDoc(p[0], p[1]), tol = 12 / this.view.s;
+    const [wx, wy] = this.toDoc(p[0], p[1]), tol = 12 / this.view.s;
     const cur = this.doc.strokes[this.sel];
     if (cur) {
-      const [x0, y0, x1, y1] = bboxOf(cur), C = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      const [x, y] = localPt(cur, wx, wy), [x0, y0, x1, y1] = bboxOf(cur), C = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+      if (Math.hypot((x0 + x1) / 2 - x, y0 - 30 / this.view.s - y) < tol * 1.6) return { idx: this.sel, mode: 'rotate' };
       for (let i = 0; i < 4; i++) if (Math.hypot(C[i][0] - x, C[i][1] - y) < tol * 1.6) return { idx: this.sel, mode: 'resize', corner: i };
       if (x > x0 - tol && x < x1 + tol && y > y0 - tol && y < y1 + tol) return { idx: this.sel, mode: 'move' };
     }
     for (let i = this.doc.strokes.length - 1; i >= 0; i--) {
       const s = this.doc.strokes[i]; if (s.tool === 'eraser') continue;
-      const [x0, y0, x1, y1] = bboxOf(s);
+      const [x, y] = localPt(s, wx, wy), [x0, y0, x1, y1] = bboxOf(s);
       if (x < x0 - tol || x > x1 + tol || y < y0 - tol || y > y1 + tol) continue;
       if (SHAPES.includes(s.tool) || s.tool === 'spray') return { idx: i, mode: 'move' };
       for (let j = 0; j < s.pts.length; j++) { const a = s.pts[Math.max(0, j - 1)], b = s.pts[j]; if (segDist(x, y, a, b) < s.size / 2 + tol) return { idx: i, mode: 'move' }; }
@@ -232,9 +253,10 @@ export class Draw2D {
     this._push();
     const s = JSON.parse(JSON.stringify(this.doc.strokes[hit.idx])); this.doc.strokes[hit.idx] = s; // edit a copy: undo keeps the original
     this.sel = this.editing = hit.idx;
-    this.ed = { ...hit, orig: s.pts.map(q => q.slice()), box: bboxOf(s, 0), start: this.toDoc(p[0], p[1]) };
+    this.ed = { ...hit, orig: s.pts.map(q => q.slice()), rot0: s.rot || 0, c0: centerOf(s), box: bboxOf(s, 0), start: this.toDoc(p[0], p[1]) };
     this.renderAll(); this.renderLive();
   }
+  setRot(a) { const s = this.doc.strokes[this.editing ?? this.sel]; if (!s) return; s.rot = this.snapOn ? Math.round(a / (Math.PI / 12)) * (Math.PI / 12) : a; this.renderLive(); }
   dragEdit(p) {
     const e = this.ed, s = this.doc.strokes[this.editing]; if (!e || !s) return;
     const [x, y] = this.toDoc(p[0], p[1]); const [bx0, by0, bx1, by1] = e.box;
@@ -242,12 +264,20 @@ export class Draw2D {
       let dx = x - e.start[0], dy = y - e.start[1];
       if (this.snapOn) { const [sx, sy] = this.snapPt(bx0 + dx, by0 + dy); dx = sx - bx0; dy = sy - by0; }
       s.pts = e.orig.map(q => [q[0] + dx, q[1] + dy, q[2]]);
+    } else if (e.mode === 'rotate') {
+      this.setRot(Math.atan2(y - e.c0[1], x - e.c0[0]) + Math.PI / 2);
     } else if (e.mode === 'resize') {
+      // work in the object's own (unrotated) frame, keep the opposite corner pinned in place
       const C = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]], A = C[(e.corner + 2) % 4], P = C[e.corner];
-      let [nx, ny] = this.snapOn ? this.snapPt(x, y) : [x, y];
+      let [wx, wy] = this.snapOn && !e.rot0 ? this.snapPt(x, y) : [x, y];
+      const [nx, ny] = e.rot0 ? rotAround(wx, wy, e.c0, -e.rot0) : [wx, wy];
       const fx = (P[0] - A[0]) ? (nx - A[0]) / (P[0] - A[0]) : 1, fy = (P[1] - A[1]) ? (ny - A[1]) / (P[1] - A[1]) : 1;
       const cl = (f) => (Math.abs(f) < 0.05 ? (f < 0 ? -0.05 : 0.05) : f);
       s.pts = e.orig.map(q => [A[0] + (q[0] - A[0]) * cl(fx), A[1] + (q[1] - A[1]) * cl(fy), q[2]]);
+      if (e.rot0) { // centre moved → shift so the pinned corner stays where it was on screen
+        const c1 = centerOf(s), w0 = rotAround(A[0], A[1], e.c0, e.rot0), w1 = rotAround(A[0], A[1], c1, e.rot0);
+        const dx = w0[0] - w1[0], dy = w0[1] - w1[1]; s.pts = s.pts.map(q => [q[0] + dx, q[1] + dy, q[2]]);
+      }
     }
     this._keyCache = null; this.renderLive();
   }
@@ -417,7 +447,7 @@ function shapePath(ctx, s) {
     ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
     ctx.moveTo(b[0] - hl * Math.cos(ang - 0.45), b[1] - hl * Math.sin(ang - 0.45)); ctx.lineTo(b[0], b[1]);
     ctx.lineTo(b[0] - hl * Math.cos(ang + 0.45), b[1] - hl * Math.sin(ang + 0.45));
-  } else { const p = shapePoints(t, a, b); ctx.moveTo(p[0][0], p[0][1]); for (const q of p.slice(1)) ctx.lineTo(q[0], q[1]); ctx.closePath(); }
+  } else { const p = shapePoints(t, a, b, s.sides); ctx.moveTo(p[0][0], p[0][1]); for (const q of p.slice(1)) ctx.lineTo(q[0], q[1]); ctx.closePath(); }
 }
 function shapeSVG(s, attrs) {
   const [a, b] = s.pts, t = s.tool, f = (n) => +n.toFixed(1);
@@ -428,10 +458,15 @@ function shapeSVG(s, attrs) {
     const ang = Math.atan2(b[1] - a[1], b[0] - a[0]), hl = Math.max(12, s.size * 3);
     return `<path d="M${f(a[0])} ${f(a[1])}L${f(b[0])} ${f(b[1])}M${f(b[0] - hl * Math.cos(ang - 0.45))} ${f(b[1] - hl * Math.sin(ang - 0.45))}L${f(b[0])} ${f(b[1])}L${f(b[0] - hl * Math.cos(ang + 0.45))} ${f(b[1] - hl * Math.sin(ang + 0.45))}" ${attrs.replace(/fill="[^"]*"/, 'fill="none"')}/>`;
   }
-  return `<polygon points="${shapePoints(t, a, b).map(p => f(p[0]) + ',' + f(p[1])).join(' ')}" ${attrs}/>`;
+  return `<polygon points="${shapePoints(t, a, b, s.sides).map(p => f(p[0]) + ',' + f(p[1])).join(' ')}" ${attrs}/>`;
 }
 
 export function renderStroke(ctx, s) {
+  if (!s.rot) return renderStrokeInner(ctx, s);
+  const c = centerOf(s); ctx.save(); ctx.translate(c[0], c[1]); ctx.rotate(s.rot); ctx.translate(-c[0], -c[1]);
+  renderStrokeInner(ctx, s); ctx.restore();
+}
+function renderStrokeInner(ctx, s) {
   const pts = s.pts; if (!pts.length) return;
   ctx.globalAlpha = s.opacity ?? 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.strokeStyle = s.color; ctx.fillStyle = s.color; ctx.lineWidth = s.size;
@@ -484,6 +519,11 @@ export function renderStroke(ctx, s) {
 }
 
 function strokeSVG(s, forceColor) {
+  const out = strokeSVGInner(s, forceColor);
+  if (!s.rot) return out;
+  const c = centerOf(s); return `<g transform="rotate(${(s.rot * 180 / Math.PI).toFixed(2)} ${c[0].toFixed(1)} ${c[1].toFixed(1)})">${out}</g>`;
+}
+function strokeSVGInner(s, forceColor) {
   const pts = s.pts, op = s.opacity ?? 1, col = forceColor || s.color;
   const base = `stroke-linecap="round" stroke-linejoin="round"`;
   switch (s.tool) {

@@ -89,7 +89,7 @@ export class GestureEngine {
       d.track = best;
     }
     // forget hands that left the view (short grace period keeps roles through dropouts)
-    this.tracks = this.tracks.filter(tr => used.has(tr) || t - tr.lastSeen < 400);
+    this.tracks = this.tracks.filter(tr => used.has(tr) || t - tr.lastSeen < (tr.keep ? 1500 : 400));
     const domSide = this.settings.dominant;
     const roleOf = (vote) => ((vote >= 0 ? 'Right' : 'Left') === domSide ? 'dom' : 'sup');
     const live = list.map(d => d.track);
@@ -97,7 +97,9 @@ export class GestureEngine {
     if (live.length === 1) {
       const tr = live[0], other = this.tracks.find(x => x !== tr && x.role);
       if (!tr.role) {
-        if (other) { tr.role = other.role === 'dom' ? 'sup' : 'dom'; tr.forced = false; }
+        // the same hand came back elsewhere (old track not seen this frame) and its label is clear → it keeps its role
+        if (other && !used.has(other) && !this.settings.oneHandDraws && Math.abs(tr.vote) > 0.7 && roleOf(tr.vote) === other.role) { tr.role = other.role; this.tracks = this.tracks.filter(x => x !== other); }
+        else if (other) { tr.role = other.role === 'dom' ? 'sup' : 'dom'; tr.forced = false; }
         else if (this.settings.oneHandDraws || Math.abs(tr.vote) < 0.3) { tr.role = 'dom'; tr.forced = true; }
         else { tr.role = roleOf(tr.vote); tr.forced = false; }
       }
