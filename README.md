@@ -1,6 +1,6 @@
 # AirCanvas: two-hand gesture drawing (2D + 3D)
 
-You draw in the air with your webcam. Hand tracking runs fully in the browser through MediaPipe Hand Landmarker, and 3D uses Three.js. **Every library and the model are bundled here**, so the app needs no CDN and no internet at runtime.
+You draw in the air with your webcam. Hand tracking runs fully in the browser through MediaPipe Hand Landmarker, and 3D uses Three.js. **Every library and the model are bundled here**, so the app needs no CDN and no  internet at runtime.
 
 ## Run it
 
